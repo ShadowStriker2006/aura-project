@@ -1,0 +1,251 @@
+AURA 0.11.0 VALIDATION REPORT
+=============================
+
+Date: 2026-08-08
+Target: 64-bit Windows (x86_64-pc-windows-msvc)
+Feature focus: Dynamic Map Control Replay / Howling Abyss
+
+RESULT
+------
+
+PASS  Multi-map replay implementation compiles, lints, tests, renders, seeks,
+      builds, launches, and packages successfully.
+
+PASS  Movement playback is no longer incorrectly gated by the presence of a
+      territorial-control model.
+
+PASS  Howling Abyss uses a separately calibrated one-dimensional lane model;
+      it does not reuse Summoner's Rift's curved two-dimensional pressure field.
+
+IMPLEMENTED CORRECTIONS
+-----------------------
+
+1. Replay/control gating
+   Previous behavior:
+     availability.control_estimate=false replaced the entire replay with an
+     unavailable message even though Rust had returned frames and events.
+
+   Corrected behavior:
+     - positions=false/no usable coordinates -> movement unavailable;
+     - positions=true/control=false -> movement, stats, events, seeking, and
+       playback remain available with an explicit control reason;
+     - positions=true/control=true -> map-specific estimate and graph enabled.
+
+2. Schema version 2
+   Added:
+     - game_version;
+     - coordinate model ID, provenance, and canvas transforms;
+     - control_model ID, topology, anchors, and anchor provenance;
+     - separate positions_reason and control_reason.
+
+   The frontend still accepts the schema-1 reason field as a fallback.
+
+3. Map-specific coordinates
+   Summoner's Rift:
+     model: summoners_rift_rect_v1
+     projection: 0..15000
+
+   Howling Abyss:
+     model: howling_abyss_rect_v1
+     projection: 0..12800
+     provenance: aura_match_v5_calibration_16_15_v1
+
+   Unknown maps:
+     model: observed_extent_v1
+     movement-only padded observed extent
+
+   Safe raw coordinate limits remain broader than either display projection.
+   Small edge samples are clamped instead of discarded. A substantial
+   calibrated-map mismatch fails control closed and preserves movement using
+   observed extents.
+
+4. Howling Abyss control model
+   Backend guards require an early frame at <=30 seconds, at least three valid
+   positions for each team, compact same-team spawn clusters, expected opposite
+   base zones, and sufficient separation.
+
+   The frontend projects champions onto the per-match blue-to-red bridge axis,
+   evaluates bounded level/gold-weighted one-dimensional pressure, and renders
+   a straight perpendicular frontier. A single crossing produces lane-territory
+   percentages. Multiple crossings display Split pressure, suppress the false
+   single frontier, and retain an integrated pressure percentage.
+
+5. Actual terrain
+   Bundled official Data Dragon 16.15.1 minimaps:
+
+     map11-16.15.1.png
+       bytes: 70985
+       SHA-256: 5b446777c3e8491c1ab1860bc8fd448ad58f46cf3630d909f74dd3dc3dda8cd1
+
+     map12-16.15.1.png
+       bytes: 134736
+       SHA-256: 829b0d75dd765cfed406b5c591b546436f32e95c4445e3f378e89a235f6782fc
+
+   The release workflow checks both files and hashes. Terrain is embedded in
+   the app and creates no runtime download or gameplay disk cache. If a match's
+   major/minor patch family differs from 16.15, Aura labels the terrain as a
+   reference for that match patch.
+
+6. Legal notice
+   Added Riot's Legal Jibber Jabber asset notice to README and Settings.
+
+REAL ARAM CALIBRATION CHECK
+---------------------------
+
+PASS  Used the user's already-configured Windows Credential Manager Riot key
+      through a temporary read-only audit. The key was never printed, logged,
+      embedded, or copied into project files.
+
+PASS  Queried queue 450 directly and paced requests after Riot initially
+      returned HTTP 429 to an overly broad match-detail scan.
+
+PASS  Eight current real map-12 Match-V5 timelines were inspected. Only these
+      aggregate calibration values were retained:
+
+        champion x range: 846..12321
+        champion y range: 860..11716
+        repeated blue early centroid: approximately (1041,985)
+        repeated red early centroid: approximately (11965,11521)
+        second observed variant: blue (1088,977), red (12002,11396)
+
+PASS  The 0..12800 transform maps those centroids to the two termini of Riot's
+      official map-12 minimap. The former 0..15000 transform visibly compressed
+      ARAM movement toward the center.
+
+PASS  No API key, account PUUID, match ID, or Riot ID was retained by the audit.
+      The temporary audit script was removed after use.
+
+RUST VALIDATION
+---------------
+
+PASS  cargo fmt --all -- --check
+PASS  cargo check --all-targets --locked
+PASS  cargo clippy --all-targets --locked -- -D warnings
+PASS  cargo test --all-targets --locked: 55/55
+PASS  cargo clippy --all-targets --target x86_64-pc-windows-msvc --locked
+PASS  cargo test --all-targets --release --target x86_64-pc-windows-msvc
+      --locked: 55/55
+
+Focused Rust timeline coverage includes:
+  - compact snake_case schema-2 serialization;
+  - Summoner's Rift control model selection;
+  - map-12 0..12800 projection;
+  - reliable map-12 spawn-cluster model selection;
+  - unreliable map-12 anchors retaining movement without control;
+  - safe edge-coordinate clamping;
+  - unsupported-map observed extents;
+  - missing positions and unknown supported objective details.
+
+FRONTEND VALIDATION
+-------------------
+
+PASS  node --check src/main.js
+PASS  node --check src/profile-summary.js
+PASS  node --check src/map-control-replay.js
+PASS  node --check src/overlay.js
+PASS  profile-summary tests: 7/7
+PASS  map-control-replay tests: 14/14
+PASS  total JavaScript tests: 21/21
+PASS  no duplicate HTML IDs
+PASS  Tauri JSON configuration parses
+PASS  pinned map asset hashes match
+
+Focused JavaScript replay coverage includes:
+  - explicit control/movement/unavailable mode selection;
+  - safe legacy availability fallback;
+  - mirrored Summoner's Rift control symmetry;
+  - advancing team moves the Summoner's Rift estimate;
+  - near-even Howling Abyss lane control;
+  - blue ARAM advance moves the straight frontier toward red;
+  - split ARAM pressure suppresses a false single frontier;
+  - interpolated positions/gold and event-stepped kills;
+  - calibrated base-transport snapping on maps 11 and 12;
+  - uncalibrated maps do not inherit calibrated base snapping;
+  - missing-position carry-forward after both teams are known.
+
+BROWSER FIXTURE VALIDATION
+--------------------------
+
+PASS  Howling Abyss mode rendered:
+        - official bundled map-12 terrain;
+        - Estimated Lane Control readout;
+        - straight bridge frontier;
+        - Lane Control Over Time graph;
+        - ten champion markers with blue/red borders;
+        - stats, scrubber, play/seek/speed controls.
+
+PASS  Seeking to 12:15 updated:
+        lane control: 55% Blue / 45% Red
+        kills: 1 - 0
+        gold: 29.4k - 27.6k
+        turrets: 1 - 0
+        clock: 12:15
+        event banner: 12:05 - Blue - outer turret destroyed
+
+PASS  Movement-only mode retained one map canvas, one scrubber, and three
+      playback buttons while containing zero control readouts and zero graph
+      canvases.
+
+PASS  Summoner's Rift mode rendered the bundled map-11 terrain, Map Control
+      readout, frontier, graph, stats, and controls.
+
+PASS  Browser console: zero warnings/errors for all three fixture modes.
+
+WINDOWS RELEASE VALIDATION
+--------------------------
+
+PASS  Version synchronized in Cargo.toml, Cargo.lock, tauri.conf.json, and UI:
+      0.11.0
+
+PASS  Optimized x64 app built:
+        Aura.exe
+        bytes: 5698560
+        FileVersion/ProductVersion: 0.11.0
+        SHA-256: 44174a79f5d0b657411bdafbb4a7790a631472e4d57a78542fc34d8c1be7d9bf
+
+PASS  NSIS installer built:
+        Aura_0.11.0_x64-setup.exe
+        bytes: 1993471
+        FileVersion/ProductVersion: 0.11.0
+        SHA-256: 4504e6a0ad5c396bb5a7ab600c39e1ac404d0fab7df750e772dc8d11c9a84eda
+
+PASS  SHA256SUMS.txt parses and matches both artifacts.
+
+PASS  Executable binary contains the bundled map-12 asset/model/UI identifiers.
+
+PASS  Isolated portable startup smoke test stayed alive for six seconds:
+        parent process working set at sample: 31.8 MiB
+        process was then deliberately terminated
+      An already-running user Aura process was detected and left untouched.
+      The temporary renamed smoke-test copy was deleted; original artifacts
+      remain intact.
+
+PASS  BUILD-WINDOWS.bat repeat run reused the verified fingerprint cache and
+      completed in 2.76 seconds instead of recompiling.
+
+KNOWN BOUNDARIES
+----------------
+
+1. Local artifacts are NOT Authenticode-signed. Public distribution must use
+   the configured GitHub release workflow with a trusted certificate and
+   timestamp. The workflow refuses a public release when signing is absent.
+
+2. The NSIS installer was built and structurally verified but was not installed
+   over the user's existing Aura installation. A clean-install/upgrade/uninstall
+   matrix remains a release-candidate task because it intentionally changes the
+   user's installed application state.
+
+3. Riot formally documents Timeline x/y as integers but does not guarantee map
+   bounds, origin, base coordinates, brush polygons, or recall state. The ARAM
+   projection is explicitly Aura's empirical v1 calibration and fails closed.
+
+4. Data Dragon terrain is not a brush or walkability mask. Aura cannot truthfully
+   prove that a sampled champion is inside a bush.
+
+5. Timeline positions are coarse snapshots. Interpolation is visual only. A
+   large base transition can be transport, death/respawn, normal movement, or
+   another return; Aura does not label it as an exact observed recall cast.
+
+6. The process working-set sample covers only the isolated parent executable at
+   startup, not the complete WebView2 process tree and not an in-match workload.
+   It must not be presented as proof of the original <30 MiB whole-app target.

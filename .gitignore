@@ -1,0 +1,9 @@
+/dist/
+/src-tauri/target/
+
+# Runtime credentials must never be committed or packaged.
+.env
+.env.*
+!.env.example
+aura.runtime.env
+*.secrets.json

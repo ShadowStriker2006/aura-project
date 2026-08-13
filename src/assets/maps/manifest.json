@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "ddragon_version": "16.15.1",
+  "fetched_on": "2026-08-08",
+  "maps": [
+    {
+      "map_id": 11,
+      "name": "Summoner's Rift",
+      "filename": "map11-16.15.1.png",
+      "source_url": "https://ddragon.leagueoflegends.com/cdn/16.15.1/img/map/map11.png",
+      "bytes": 70985,
+      "sha256": "5b446777c3e8491c1ab1860bc8fd448ad58f46cf3630d909f74dd3dc3dda8cd1"
+    },
+    {
+      "map_id": 12,
+      "name": "Howling Abyss",
+      "filename": "map12-16.15.1.png",
+      "source_url": "https://ddragon.leagueoflegends.com/cdn/16.15.1/img/map/map12.png",
+      "bytes": 134736,
+      "sha256": "829b0d75dd765cfed406b5c591b546436f32e95c4445e3f378e89a235f6782fc"
+    }
+  ]
+}

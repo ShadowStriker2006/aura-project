@@ -1,0 +1,310 @@
+name: Release Windows x64
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing or new version tag matching the app version (for example v0.14.0)
+        required: true
+        type: string
+      publish_release:
+        description: Publish immediately instead of creating a private draft
+        required: true
+        default: false
+        type: boolean
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aura-windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AURA_WINDOWS_TARGET: x86_64-pc-windows-msvc
+  CARGO_INCREMENTAL: "1"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-windows:
+    name: Validate, build, and publish installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      AURA_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      AURA_PUBLIC_RELEASE: ${{ github.event_name == 'push' || inputs.publish_release }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust for Windows x64
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Restore Rust dependencies and build outputs
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: aura-windows-x64-release
+          workspaces: "./src-tauri -> target"
+          cache-on-failure: true
+
+      - name: Validate release version and tag
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $metadata = cargo metadata `
+            --manifest-path src-tauri/Cargo.toml `
+            --format-version 1 `
+            --locked `
+            --no-deps | ConvertFrom-Json
+          $version = [string]$metadata.packages[0].version
+          $tauriConfig = Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+
+          if ([string]$tauriConfig.version -ne $version) {
+            throw "Cargo.toml version $version does not match tauri.conf.json version $($tauriConfig.version)."
+          }
+
+          if ($env:AURA_RELEASE_TAG -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$') {
+            throw "Release tag '$env:AURA_RELEASE_TAG' must be a semantic version beginning with v."
+          }
+          if ($env:AURA_RELEASE_TAG -ne "v$version") {
+            throw "Release tag '$env:AURA_RELEASE_TAG' does not match app version v$version."
+          }
+
+          $isPublic = $env:AURA_PUBLIC_RELEASE -eq "true"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "public=$(([string]$isPublic).ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Verify Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Verify frontend and configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          node --check src/main.js
+          node --check src/services/ipc.js
+          node --check src/components/analytics/live-game-metrics.js
+          node --check src/components/overlay/live-overlay.js
+          node --check src/profile-summary.js
+          node --check src/map-control-replay.js
+          node --check src/overlay.js
+          node --test tests/*.test.mjs
+          node scripts/BENCH-LIVE-PIPELINE.mjs
+          Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json | Out-Null
+          & ./scripts/VERIFY-MAP-ASSETS.ps1
+          foreach ($htmlPath in @('src/index.html', 'src/overlay.html')) {
+            $html = Get-Content $htmlPath -Raw
+            $ids = [regex]::Matches($html, '\bid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+            $duplicates = $ids | Group-Object | Where-Object Count -gt 1
+            if ($duplicates) {
+              throw "Duplicate HTML IDs in ${htmlPath}: $($duplicates.Name -join ', ')"
+            }
+          }
+
+      - name: Run strict Rust linting
+        run: >-
+          cargo clippy
+          --manifest-path src-tauri/Cargo.toml
+          --all-targets
+          --target ${{ env.AURA_WINDOWS_TARGET }}
+          --locked
+          --
+          -D warnings
+
+      - name: Run optimized release tests
+        run: >-
+          cargo test
+          --manifest-path src-tauri/Cargo.toml
+          --all-targets
+          --release
+          --target ${{ env.AURA_WINDOWS_TARGET }}
+          --locked
+
+      - name: Prepare optional Authenticode signing
+        id: signing
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+          REQUIRE_SIGNING: ${{ steps.version.outputs.public }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $baseArgs = "--target $env:AURA_WINDOWS_TARGET --bundles nsis --ci"
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+          $hasTimestamp = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_TIMESTAMP_URL)
+
+          if (-not $hasCertificate -and -not $hasPassword -and -not $hasTimestamp) {
+            if ($env:REQUIRE_SIGNING -eq "true") {
+              throw "Public releases require WINDOWS_CERTIFICATE, WINDOWS_CERTIFICATE_PASSWORD, and WINDOWS_TIMESTAMP_URL."
+            }
+            "args=$baseArgs --no-sign" >> $env:GITHUB_OUTPUT
+            "signed=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          if (-not ($hasCertificate -and $hasPassword -and $hasTimestamp)) {
+            throw "Windows signing is partially configured. Set all three signing values or remove all three."
+          }
+
+          $timestampUri = $null
+          if (-not [Uri]::TryCreate($env:WINDOWS_TIMESTAMP_URL, [UriKind]::Absolute, [ref]$timestampUri) -or
+              $timestampUri.Scheme -ne "https") {
+            throw "WINDOWS_TIMESTAMP_URL must be an absolute HTTPS URL supplied by the certificate issuer."
+          }
+
+          $encoded = $env:WINDOWS_CERTIFICATE.Trim()
+          if ($encoded -match '-----BEGIN [^-]+-----') {
+            $encoded = (($encoded -split '\r?\n') |
+              Where-Object { $_ -notmatch '^-----' }) -join ""
+          }
+          $encoded = $encoded -replace '\s', ''
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP "aura-code-signing.pfx"
+          $configPath = Join-Path $env:RUNNER_TEMP "aura-signing.conf.json"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($encoded))
+
+          $securePassword = ConvertTo-SecureString `
+            -String $env:WINDOWS_CERTIFICATE_PASSWORD `
+            -AsPlainText `
+            -Force
+          $certificate = Import-PfxCertificate `
+            -FilePath $pfxPath `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $securePassword
+
+          if (-not $certificate -or -not $certificate.HasPrivateKey) {
+            throw "The imported Windows certificate does not contain a private key."
+          }
+          $codeSigningOid = "1.3.6.1.5.5.7.3.3"
+          if ($certificate.EnhancedKeyUsageList.ObjectId.Value -notcontains $codeSigningOid) {
+            throw "The imported certificate is not authorized for code signing."
+          }
+
+          @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $certificate.Thumbprint
+                digestAlgorithm = "sha256"
+                timestampUrl = $env:WINDOWS_TIMESTAMP_URL
+              }
+            }
+          } | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath $configPath -Encoding utf8
+
+          $portableConfigPath = $configPath.Replace('\', '/')
+          "args=$baseArgs --config $portableConfigPath" >> $env:GITHUB_OUTPUT
+          "signed=true" >> $env:GITHUB_OUTPUT
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "pfx_path=$pfxPath" >> $env:GITHUB_OUTPUT
+          "config_path=$configPath" >> $env:GITHUB_OUTPUT
+
+      - name: Build NSIS installer and upload GitHub Release asset
+        id: tauri
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          tagName: ${{ env.AURA_RELEASE_TAG }}
+          releaseName: Aura ${{ steps.version.outputs.version }}
+          releaseBody: Download the Windows x64 setup executable below. End users do not need Rust, Cargo, PowerShell, or a source-code checkout.
+          # Every build starts private. A public release is only exposed after
+          # the signature and checksum validation steps below have succeeded.
+          releaseDraft: true
+          prerelease: false
+          generateReleaseNotes: true
+          retryAttempts: 2
+          args: ${{ steps.signing.outputs.args }}
+          releaseAssetNamePattern: Aura_[version]_x64[setup][ext]
+          uploadPlainBinary: false
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+
+      - name: Stage installer and checksum
+        id: artifacts
+        shell: pwsh
+        env:
+          EXPECT_SIGNED: ${{ steps.signing.outputs.signed }}
+          REQUIRE_SIGNING: ${{ steps.version.outputs.public }}
+          AURA_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $bundleDirectory = Join-Path $PWD "src-tauri/target/$env:AURA_WINDOWS_TARGET/release/bundle/nsis"
+          $installers = @(Get-ChildItem -LiteralPath $bundleDirectory -Filter "*.exe" -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer in $bundleDirectory; found $($installers.Count)."
+          }
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $installers[0].FullName
+          if ($env:EXPECT_SIGNED -eq "true" -and $signature.Status -ne "Valid") {
+            throw "The installer was expected to be signed, but Authenticode status is $($signature.Status)."
+          }
+          if ($env:REQUIRE_SIGNING -eq "true" -and $signature.Status -ne "Valid") {
+            throw "Refusing to publish an unsigned or untrusted installer."
+          }
+
+          $releaseDirectory = Join-Path $PWD "dist/release"
+          New-Item -ItemType Directory -Force -Path $releaseDirectory | Out-Null
+          $installerName = "Aura_$env:AURA_VERSION`_x64-setup.exe"
+          $stagedInstaller = Join-Path $releaseDirectory $installerName
+          Copy-Item -LiteralPath $installers[0].FullName -Destination $stagedInstaller -Force
+
+          $hash = (Get-FileHash -LiteralPath $stagedInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$installerName" |
+            Set-Content -LiteralPath (Join-Path $releaseDirectory "SHA256SUMS.txt") -Encoding ascii
+          "installer=$stagedInstaller" >> $env:GITHUB_OUTPUT
+
+      - name: Upload checksum to GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload $env:AURA_RELEASE_TAG dist/release/SHA256SUMS.txt --clobber
+
+      - name: Upload installer-only workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aura-${{ steps.version.outputs.version }}-Windows-x64
+          path: |
+            dist/release/Aura_${{ steps.version.outputs.version }}_x64-setup.exe
+            dist/release/SHA256SUMS.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Publish validated release
+        if: steps.version.outputs.public == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit $env:AURA_RELEASE_TAG --draft=false --prerelease=false
+
+      - name: Remove temporary signing material
+        if: always()
+        shell: pwsh
+        env:
+          CERTIFICATE_THUMBPRINT: ${{ steps.signing.outputs.thumbprint }}
+          PFX_PATH: ${{ steps.signing.outputs.pfx_path }}
+          SIGNING_CONFIG_PATH: ${{ steps.signing.outputs.config_path }}
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:CERTIFICATE_THUMBPRINT)) {
+            $certificatePath = "Cert:\CurrentUser\My\$env:CERTIFICATE_THUMBPRINT"
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
+          foreach ($path in @($env:PFX_PATH, $env:SIGNING_CONFIG_PATH)) {
+            if (-not [string]::IsNullOrWhiteSpace($path) -and
+                (Test-Path -LiteralPath $path)) {
+              Remove-Item -LiteralPath $path -Force
+            }
+          }

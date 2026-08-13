@@ -1,0 +1,171 @@
+AURA 0.11.1 VALIDATION REPORT
+=============================
+
+Validation date: 2026-08-09
+Platform: Windows x64 (MSVC)
+Scope: ranked-profile failure isolation, IPC integrity, pinned replay map
+assets, release build, portable startup, and packaging.
+
+RESULT
+------
+
+PASS. Aura 0.11.1 compiled, passed the complete deterministic test suite,
+produced a portable Windows executable and NSIS installer, and started
+successfully in a five-second smoke test.
+
+STRUCTURAL FINDINGS AND RESOLUTION
+----------------------------------
+
+1. get_league_entries
+
+The command had previously been folded into get_summoner_profile. That was not
+a missing-symbol compile problem, but it created an all-or-nothing failure:
+a League-V4 error could hide valid Summoner-V4 level/icon data and prevent the
+Match-V5 history stage from running.
+
+Resolution:
+- get_summoner_profile now fetches only Summoner-V4 icon and level.
+- get_league_entries is restored as a separate League-V4 command.
+- Level/icon, rank, mastery, and recent matches start independently after
+  identity resolution and have separate success/error presentation.
+- Rank results use a two-minute, per-identity volatile RAM cache.
+- Concurrent rank callers share one OnceCell in-flight request.
+- API-key and identity changes atomically invalidate cached and active rank
+  state so an old response cannot repopulate a new profile.
+
+2. Apparently unused Tauri commands
+
+The advisor draft/live/post, Spotify play/pause/previous/skip, and overlay
+show/hide commands are live. Their command strings are deliberately selected
+from fixed frontend dispatch tables/button handlers, so a direct static invoke
+grep does not reveal them. get_champion_details is a direct live call.
+
+The only genuinely orphaned command was load_riot_id_prefs. Its matching save
+command wrote a RAM-only value that no caller ever read. The complete dead
+preference path was removed: backend state, DTO, save/load commands, handler
+registrations, frontend save call, obsolete persist options, and fixture stub.
+
+A new IPC contract test now verifies every registered Tauri command against
+both direct and reviewed hard-coded dynamic frontend dispatch. It also rejects
+frontend command names that do not have a registered handler.
+
+3. Replay map asset versioning
+
+The bundled minimaps must remain pinned and must not follow the live Data
+Dragon catalog. Using the live version to construct a packaged filename would
+be the actual 404 risk.
+
+Resolution:
+- Added src/assets/maps/manifest.json as the canonical pinned registry.
+- Runtime filename/version metadata and the asset README are generated from
+  the manifest.
+- scripts/VERIFY-MAP-ASSETS.ps1 checks schema, exact filenames, byte counts,
+  SHA-256 digests, PNG signatures, source URL convention, exact PNG set, and
+  generated metadata/documentation synchronization.
+- The verifier runs before the local publisher cache check and in release CI.
+- The live Data Dragon version is display-only advisory metadata.
+- Image load/decode failure visibly reports a neutral coordinate grid while
+  champion movement and calibrated pressure rendering remain available.
+
+DETERMINISTIC FRONTEND VALIDATION
+---------------------------------
+
+JavaScript syntax:
+- src/main.js: PASS
+- src/profile-summary.js: PASS
+- src/map-control-replay.js: PASS
+- src/overlay.js: PASS
+- tests/tauri-profile-mock.js: PASS
+
+Node tests:
+- Profile summary: 7/7 PASS
+- Dynamic Map Control Replay and map metadata: 18/18 PASS
+- IPC command contract: 2/2 PASS
+- Total: 27/27 PASS, 0 failed
+
+Additional checks:
+- Two pinned map assets: PASS
+- Map manifest/generated metadata/README synchronization: PASS
+- JSON configuration decode: PASS
+- Duplicate HTML IDs: none
+- Dead Riot preference references: none
+- Posted Riot API key material in source/assets/package inputs: none
+
+BROWSER ACCEPTANCE
+------------------
+
+The real application page ran against a deterministic Tauri command fixture.
+
+Normal League-V4 path:
+- Level 321 rendered.
+- Solo/Duo rendered as EMERALD II, 0 LP, 48W/32L, 60% WR.
+- Flex rendered as GOLD I, 55 LP, 22W/18L, 55% WR.
+- Top 3 of 3 mastery entries rendered.
+
+Forced League-V4 failure path:
+- Level 321 still rendered.
+- Top 3 of 3 mastery entries still rendered.
+- Match-V5 history request completed and showed its honest empty result.
+- Solo/Flex showed rank-specific unavailable states.
+- Final status identified only rank as unavailable.
+- The only browser console error was the deliberately injected rank failure.
+
+RUST VALIDATION
+---------------
+
+- cargo fmt --all -- --check: PASS
+- cargo check --all-targets --locked --target x86_64-pc-windows-msvc: PASS
+- cargo clippy --all-targets --locked --target x86_64-pc-windows-msvc
+  -- -D warnings: PASS
+- cargo test --all-targets --release --locked
+  --target x86_64-pc-windows-msvc: 60/60 PASS, 0 failed
+
+The Rust suite includes six ranked-route/cache/contract tests plus explicit
+API-key invalidation coverage.
+
+WINDOWS BUILD AND STARTUP
+-------------------------
+
+The first publisher attempt correctly rejected stale copied v0.10 Cargo
+metadata that pointed to an old absolute workspace path. Only generated Cargo
+build artifacts were removed (17,296 files, 7.8 GiB); source and configuration
+were untouched. A clean build then completed successfully.
+
+Clean optimized x64 + NSIS build: PASS (6 minutes 20 seconds)
+Immediate unchanged repeat publisher build: PASS (3.31 seconds)
+Repeat result: input fingerprint matched and verified artifacts were reused.
+
+Portable startup smoke test:
+- Aura.exe launched from the staged release folder.
+- Process remained alive for the five-second startup window.
+- Test process was stopped afterward; no Aura test process remained.
+
+ARTIFACTS
+---------
+
+Aura.exe
+- Size: 5,698,048 bytes
+- FileVersion/ProductVersion: 0.11.1
+- SHA-256: 081c925e9e689126bca394079b9a88d63338e10e748b5c7ca62185e3879c4e51
+
+Aura_0.11.1_x64-setup.exe
+- Size: 1,996,572 bytes
+- FileVersion/ProductVersion: 0.11.1
+- SHA-256: bce92f466011c04b7d36f23a974ecaeec0925353eb1f0544ac501b0c6d3a9a78
+
+The portable executable contains both pinned map filenames and the restored
+get_league_entries command. Tauri verified the NSIS package during bundling.
+
+KNOWN RELEASE BOUNDARIES
+------------------------
+
+- These local artifacts are intentionally unsigned. A public installer still
+  requires the documented Authenticode certificate/signing workflow.
+- Clean install, upgrade, and uninstall were not executed in this patch test;
+  the generated NSIS package itself was verified by Tauri.
+- Live Riot and Spotify acceptance depends on the user's current accounts,
+  League Client state, Spotify Premium/device eligibility, and a non-expired
+  Riot key. No plaintext credentials were read or logged during this test.
+- Bundled terrain remains a visual reference, not authoritative brush,
+  pathing, fog-of-war, recall, or vision geometry.
+

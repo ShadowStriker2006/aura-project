@@ -1,0 +1,178 @@
+AURA 0.12.0 VALIDATION REPORT
+=============================
+
+Date: 2026-08-09
+Platform: Windows x64 (MSVC), Tauri v2, WebView2
+
+
+RESULT
+------
+
+PASS. Aura 0.12.0 compiled, passed the complete deterministic Rust and
+frontend suites, rendered the typed live-client HUD in the real application
+page fixture at desktop and narrow widths, produced an optimized portable
+executable and NSIS installer, and completed an eight-second native launch
+smoke test without exiting early.
+
+
+IMPLEMENTED SCOPE
+-----------------
+
+- Added exact TypeScript contracts in src/types/ipc.ts.
+- Added typed Rust payloads and event emitters in
+  src-tauri/src/live_client/mod.rs.
+- Added game:state-changed, live:game-tick, live:player-update, and
+  draft:update channels.
+- Reused one Live Client Data supervisor; no competing poller was added.
+- Emits live HUD ticks once per second during a match.
+- Refreshes objective events and emits player item updates every five seconds.
+- Added a validated frontend command/listener service with timeouts and
+  idempotent cleanup.
+- Added a responsive Live Game HUD for time, identity, champion, KDA, current
+  gold, DPM, team gold differential, and objective countdowns.
+- Preserved separate Summoner-V4 and League-V4 commands.
+- Preserved manifest-owned, offline map asset resolution.
+- Removed no working feature and restored no dead Riot preference state.
+
+
+FRONTEND AND CONTRACT VERIFICATION
+----------------------------------
+
+PASS  JavaScript syntax:
+      src/main.js
+      src/services/ipc.js
+      src/components/analytics/live-game-metrics.js
+      src/profile-summary.js
+      src/map-control-replay.js
+      src/overlay.js
+
+PASS  node --test tests/*.test.mjs
+      36 passed, 0 failed, 0 skipped.
+
+Coverage includes:
+
+- direct and dynamic command registration/call matching;
+- Rust/frontend event-channel literal matching;
+- camelCase and defensive snake_case tick normalization;
+- invalid status/team rejection and finite non-negative counters;
+- synchronous native errors converted to Promise rejections;
+- partial listener-registration rollback and idempotent cleanup;
+- safe textContent-only DOM rendering;
+- measured versus unavailable DPM/team-gold presentation;
+- existing profile, mastery, rank, map replay, ARAM, and asset fallback tests.
+
+PASS  HTML identity check: 132 IDs, 0 duplicates.
+PASS  Tauri JSON parse.
+PASS  Map verifier: 2/2 pinned assets, filenames, byte counts, SHA-256,
+      PNG signatures, generated metadata, and manifest documentation.
+
+
+RUST VERIFICATION
+-----------------
+
+PASS  cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+PASS  cargo check --manifest-path src-tauri/Cargo.toml --all-targets --locked
+PASS  cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+      --locked -- -D warnings
+PASS  cargo test --manifest-path src-tauri/Cargo.toml --all-targets --locked
+      69 passed, 0 failed, 0 ignored.
+
+New Rust coverage includes:
+
+- exact GameStatus wire strings;
+- LCU phase-to-status mapping;
+- complete camelCase live-tick serialization;
+- red-team HARMONY serialization;
+- active-player response decoding when Riot returns both summonerName and
+  riotId fields;
+- unique Riot-ID fallback matching;
+- KDA/current-gold/objective payload construction;
+- CHAOS-to-HARMONY player mapping and item filtering;
+- last Dragon/Baron event timer selection;
+- truthful unavailability flags for unsupported live metrics.
+
+
+REAL-PAGE BROWSER VERIFICATION
+------------------------------
+
+PASS  Existing application index.html loaded with the deterministic Tauri
+      browser fixture.
+PASS  Sidebar navigation opened the Live Game page.
+PASS  game:state-changed rendered In Game in both live status badges.
+PASS  live:game-tick rendered 12:34, Aura Fixture#EUNE, Briar, 7/2/5,
+      1475g, Infernal Dragon countdown, and Baron READY.
+PASS  Unsupported DPM and team-gold totals remained explicitly Unavailable.
+PASS  1200x760/default desktop layout had no horizontal overflow.
+PASS  760x900 narrow layout had no horizontal overflow; live metrics remained
+      visible and reflowed to the smaller grid.
+
+
+WINDOWS RELEASE BUILD
+---------------------
+
+PASS  Optimized x86_64-pc-windows-msvc application build.
+PASS  NSIS bundle build.
+PASS  Cargo/Tauri/UI/FileVersion/ProductVersion all report 0.12.0.
+
+First optimized release build after the feature change:
+  5 minutes 37 seconds of Cargo release compilation.
+
+Unchanged repeat publisher build:
+  3.67 seconds using the verified input fingerprint and cached artifacts.
+
+Artifacts:
+
+Aura.exe
+  Size: 5,749,760 bytes
+  SHA-256: b263cd1fbf5968bd9f22af83c691afee781c30e33ce69e14b0822c704b24336a
+  FileVersion/ProductVersion: 0.12.0
+  Authenticode: NotSigned
+
+Aura_0.12.0_x64-setup.exe
+  Size: 2,011,839 bytes
+  SHA-256: 5dd361ca6a49d6364afc64735b1f219206b3b0e12ebee21ab337893149b13de8
+  FileVersion/ProductVersion: 0.12.0
+  Authenticode: NotSigned
+
+
+NATIVE SMOKE TEST
+-----------------
+
+PASS  Portable Aura.exe remained alive for eight seconds.
+PASS  WebView2 processes initialized.
+PASS  Test process was stopped cleanly after inspection.
+
+Observed Aura main-process working set after eight seconds: 36.11 MiB.
+This machine therefore does not prove the aspirational sub-30 MiB total-memory
+target. Working-set and local polling measurements still need profiling on the
+intended low-spec hardware during a real match.
+
+
+SECURITY AND STRUCTURAL INVARIANTS
+----------------------------------
+
+PASS  No UUID-shaped Riot development key is embedded in source.
+PASS  No MAP_ASSET_VERSION constant exists.
+PASS  No load_riot_id_prefs, save_riot_id_prefs, or RiotIdPrefs symbol exists.
+PASS  get_summoner_profile and get_league_entries remain separate registered
+      commands and separate Rust functions.
+PASS  Live payload strings reach the DOM through textContent, not innerHTML.
+PASS  Exact DPM and team total gold are not fabricated from attack damage or
+      inventory prices.
+
+
+KNOWN RELEASE LIMITS
+--------------------
+
+1. A real League match acceptance test was not available in this deterministic
+   build run. The 1 Hz local endpoints, event timing, CPU, and network overhead
+   must be observed with League of Legends running on target hardware.
+2. Riot's official Live Client Data API does not expose live champion damage
+   totals or exact team total gold. The wire fields are retained for contract
+   stability, but metricAvailability is false and the UI says Unavailable.
+3. The local artifacts are intentionally unsigned test builds. A public release
+   must use the documented GitHub signing flow and a valid Authenticode
+   certificate/timestamp.
+4. Public Riot API distribution still requires product registration and an
+   approved server-side production-key design; never embed a production key in
+   the desktop binary.

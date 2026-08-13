@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Aura — League Companion</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <aside class="sidebar">
+            <div class="sidebar-logo">AURA</div>
+            <nav aria-label="Main navigation">
+                <button class="nav-item active" data-page="home">Home</button>
+                <button class="nav-item" data-page="profile">Profile</button>
+                <button class="nav-item" data-page="champions">Champions</button>
+                <button class="nav-item" data-page="builds">Builds</button>
+                <button class="nav-item" data-page="runes">Runes</button>
+                <button class="nav-item" data-page="live">Live Game <span class="live-tag">LIVE</span></button>
+                <button class="nav-item" data-page="intelligence">Aura Intelligence</button>
+                <button class="nav-item" data-page="overlays">Overlays</button>
+                <button class="nav-item" data-page="settings">Settings</button>
+            </nav>
+            <div class="sidebar-foot">
+                <span id="ddragon-state">Loading game data…</span>
+                <span id="patch-label">Patch —</span>
+            </div>
+        </aside>
+
+        <div class="viewport-wrapper">
+            <header>
+                <div class="search-container">
+                    <input id="global-champion-search" type="search" placeholder="Search any champion…" autocomplete="off" spellcheck="false">
+                    <div id="global-search-results" class="search-results" hidden></div>
+                </div>
+                <div class="header-right">
+                    <img class="profile-icon" id="profile-icon" src="" alt="">
+                    <div class="profile-info">
+                        <div class="profile-name" id="profile-name">Riot ID not loaded</div>
+                        <div class="profile-rank" id="profile-rank">Aura 0.14.0</div>
+                    </div>
+                </div>
+            </header>
+
+            <main class="main-content-scroller">
+                <section class="page-view active" data-page-view="home">
+                    <div class="page-heading">
+                        <div><span class="eyebrow">Dashboard</span><h1>Welcome to Aura</h1></div>
+                        <span id="home-clock" class="muted"></span>
+                    </div>
+
+                    <section class="card hero-banner">
+                        <div class="hero-overlay"></div>
+                        <div class="hero-content">
+                            <div class="champion-title">Lightweight companion</div>
+                            <h2>Your rank and champion identity at a glance.</h2>
+                            <p>Start League or load a Riot profile to see official Solo/Duo rank, account level, and top champion mastery.</p>
+                            <div class="hero-buttons">
+                                <button id="hero-profile" class="btn-cta">Open Match History</button>
+                                <button id="hero-overlays" class="btn-secondary">Overlay Settings</button>
+                            </div>
+                            <div class="hero-floating" aria-label="Loaded League profile summary">
+                                <div class="hero-stat">
+                                    <strong id="home-rank-value" class="hero-value">—</strong>
+                                    <span class="hero-label">Solo/Duo</span>
+                                    <span id="home-rank-detail" class="hero-subvalue">Profile not loaded</span>
+                                </div>
+                                <div class="hero-stat">
+                                    <strong id="home-mastery-value" class="hero-value">—</strong>
+                                    <span class="hero-label">Top mastery</span>
+                                    <span id="home-mastery-detail" class="hero-subvalue">Profile not loaded</span>
+                                </div>
+                                <div class="hero-stat">
+                                    <strong id="home-level-value" class="hero-value">—</strong>
+                                    <span class="hero-label">Account level</span>
+                                    <span id="home-level-detail" class="hero-subvalue">Waiting for League</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="grid-two-col">
+                        <section class="card">
+                            <h3>League Client</h3>
+                            <div id="gameflow-phase" class="status-badge">WAITING…</div>
+                            <p class="card-copy">Aura listens to your local League client and updates Champion Select automatically.</p>
+                            <button class="text-button" data-go-page="live">Open Live Game →</button>
+                        </section>
+                        <section class="card">
+                            <h3>Objective Timers</h3>
+                            <div class="timer-grid">
+                                <div class="timer-box"><span class="label">DRAGON</span><span id="timer-dragon" class="time-val">READY</span></div>
+                                <div class="timer-box"><span class="label">BARON</span><span id="timer-baron" class="time-val">READY</span></div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="grid-two-col">
+                        <section class="card">
+                            <div class="section-row"><h3>Spotify Controller</h3><button id="btn-login" class="btn-secondary compact">Connect</button></div>
+                            <div class="now-playing">
+                                <strong id="spotify-track">Not connected</strong>
+                                <span id="spotify-artist">Connect Spotify, then choose a playback device.</span>
+                            </div>
+                            <div class="spotify-controls">
+                                <button id="btn-prev" class="btn-icon" aria-label="Previous">⏮</button>
+                                <button id="btn-play" class="btn-icon primary" aria-label="Play">▶</button>
+                                <button id="btn-pause" class="btn-icon" aria-label="Pause">⏸</button>
+                                <button id="btn-skip" class="btn-icon" aria-label="Next">⏭</button>
+                                <button id="btn-refresh-devices" class="btn-secondary compact">Refresh Devices</button>
+                            </div>
+                            <div class="device-row">
+                                <select id="spotify-device-select" aria-label="Spotify playback device"><option value="">No device loaded</option></select>
+                                <button id="btn-transfer-device" class="btn-secondary compact">Use Device</button>
+                                <button id="btn-aura-player" class="btn-cta compact">Start Aura Player</button>
+                                <button id="btn-browser-player" class="btn-secondary compact" hidden>Open Browser Player</button>
+                                <button id="btn-stop-aura-player" class="btn-secondary compact" disabled>Stop Aura Player</button>
+                                <button id="btn-open-spotify" class="text-button">Use External Player</button>
+                            </div>
+                            <div id="spotify-config-status" class="integration-status pending">Checking Spotify…</div>
+                            <div id="spotify-action-status" class="inline-message">The callback address only works while Connect is waiting for Spotify.</div>
+                        </section>
+                        <section class="card">
+                            <h3>Manual Camp Timers</h3>
+                            <p class="card-copy">Tap once to start a five-minute respawn timer; tap again to cancel.</p>
+                            <div class="buff-grid">
+                                <button id="btn-blue-buff" class="buff-btn">OUR BLUE (5:00)</button>
+                                <button id="btn-red-buff" class="buff-btn">OUR RED (5:00)</button>
+                            </div>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="page-view" data-page-view="profile">
+                    <div class="page-heading"><div><span class="eyebrow">Profile</span><h1>Riot Match History</h1></div></div>
+                    <section class="card">
+                        <div class="section-row">
+                            <div><h3>Riot Account</h3><div id="riot-config-status" class="integration-status pending">Checking Riot API configuration…</div></div>
+                            <div class="button-row">
+                                <button id="btn-my-profile" class="btn-secondary compact" disabled>My League Profile</button>
+                                <button class="btn-secondary compact" data-go-page="settings">API Key Settings</button>
+                            </div>
+                        </div>
+                        <div class="riot-id-form">
+                            <input type="text" id="riot-game-name" placeholder="Game Name" autocomplete="off" spellcheck="false">
+                            <span class="riot-id-sep">#</span>
+                            <input type="text" id="riot-tag-line" placeholder="Tag" autocomplete="off" spellcheck="false">
+                            <select id="riot-platform">
+                                <option value="" disabled selected>Select server…</option>
+                                <option value="na1">NA</option><option value="euw1">EUW</option><option value="eun1">EUNE</option>
+                                <option value="kr">KR</option><option value="jp1">JP</option><option value="br1">BR</option>
+                                <option value="la1">LAN</option><option value="la2">LAS</option><option value="oc1">OCE</option>
+                                <option value="tr1">TR</option><option value="ru">RU</option><option value="sg2">SEA (SG/MY)</option>
+                                <option value="ph2">SEA (PH)</option><option value="th2">SEA (TH)</option>
+                                <option value="tw2">SEA (TW)</option><option value="vn2">SEA (VN)</option>
+                            </select>
+                            <button id="btn-load-matches" class="btn-cta">Load Profile</button>
+                        </div>
+                        <div id="match-status" class="inline-message">Start the League Client to detect your signed-in account, or enter a Riot ID manually.</div>
+                        <div class="summoner-card">
+                            <img id="profile-page-icon" src="" alt="">
+                            <div class="summoner-rank-copy">
+                                <strong id="profile-level">Level —</strong>
+                                <span id="profile-solo-rank">Solo/Duo rank —</span>
+                                <div id="profile-solo-flags" class="rank-flags" role="group" aria-label="Solo/Duo rank status"></div>
+                                <span id="profile-flex-rank">Flex rank —</span>
+                                <div id="profile-flex-flags" class="rank-flags" role="group" aria-label="Flex rank status"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="card">
+                        <h3>Recent Performance</h3>
+                        <div class="metric-grid">
+                            <div><strong id="profile-winrate">—</strong><span>Win rate</span></div>
+                            <div><strong id="profile-kda">—</strong><span>Average KDA</span></div>
+                            <div><strong id="profile-cs">—</strong><span>CS / minute</span></div>
+                            <div><strong id="profile-vision">—</strong><span>Vision score</span></div>
+                            <div><strong id="profile-kp">—</strong><span>Kill participation</span></div>
+                            <div><strong id="profile-dpm">—</strong><span>Champion damage / min</span></div>
+                        </div>
+                    </section>
+                    <section class="card">
+                        <div class="section-row">
+                            <div><h3>Champion Mastery</h3><p class="card-copy">Official mastery for the currently loaded Riot profile. Open a champion for the full detail card.</p></div>
+                            <span id="profile-mastery-status" class="muted" role="status" aria-live="polite" aria-atomic="true">Load a profile to see mastery</span>
+                        </div>
+                        <div id="profile-mastery-list" class="champ-grid"><div class="empty-state">No mastery loaded yet.</div></div>
+                    </section>
+                    <section class="card match-history-card">
+                        <div class="section-row match-history-heading">
+                            <div>
+                                <h3>Recent Matches</h3>
+                                <p class="card-copy">Open a match for the complete scoreboard, builds, runes, combat stats, vision, and objectives.</p>
+                            </div>
+                            <div class="match-history-controls" aria-label="Match history filters">
+                                <label>
+                                    <span>Games</span>
+                                    <select id="match-count">
+                                        <option value="10" selected>10</option>
+                                        <option value="20">20</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Queue</span>
+                                    <select id="match-queue-filter">
+                                        <option value="all" selected>All queues</option>
+                                        <option value="ranked">Ranked</option>
+                                        <option value="normal">Normal</option>
+                                        <option value="aram">ARAM</option>
+                                    </select>
+                                </label>
+                                <label>
+                                    <span>Result</span>
+                                    <select id="match-result-filter">
+                                        <option value="all" selected>All results</option>
+                                        <option value="win">Victories</option>
+                                        <option value="loss">Defeats</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                        <div id="match-list" class="empty-state" aria-live="polite">No matches loaded yet.</div>
+                    </section>
+                </section>
+
+                <section class="page-view" data-page-view="champions">
+                    <div class="page-heading"><div><span class="eyebrow">Game Data</span><h1>Champions</h1></div><span id="champion-result-count" class="muted"></span></div>
+                    <section class="card">
+                        <input id="champion-page-search" class="wide-input" type="search" placeholder="Filter champions by name…" autocomplete="off">
+                    </section>
+                    <div class="content-split">
+                        <section class="card"><h3>Champion Catalog</h3><div id="champion-catalog" class="champion-catalog"><div class="empty-state">Loading champions…</div></div></section>
+                        <section class="card sticky-card"><h3>Champion Details</h3><div id="champion-detail" class="empty-state">Choose a champion to see live Data Dragon details.</div></section>
+                    </div>
+                </section>
+
+                <section class="page-view" data-page-view="builds">
+                    <div class="page-heading"><div><span class="eyebrow">Planner</span><h1>Item Builds</h1></div><span id="build-champion-label" class="selection-pill">No champion selected</span></div>
+                    <section class="card recommendation-card">
+                        <div>
+                            <h3>Aura Recommended Build</h3>
+                            <p class="card-copy">Every champion gets a complete role-and-stat-based template. Enemy adaptation uses visible Champion Select picks.</p>
+                        </div>
+                        <label class="toggle-row"><input id="adapt-enemy-build" type="checkbox"><span>Adapt to enemy team</span></label>
+                        <button id="apply-recommended-build" class="btn-cta">Use Recommended Build</button>
+                        <div id="build-recommendation-status" class="inline-message">Choose a champion to prepare a build.</div>
+                    </section>
+                    <section class="card">
+                        <div class="section-row"><h3>Your Six-Item Build</h3><button id="clear-build" class="btn-secondary compact">Clear Build</button></div>
+                        <div id="build-slots" class="build-slots"></div>
+                        <p class="card-copy">Click items below to add them. This planner is kept in RAM only and never writes during gameplay.</p>
+                    </section>
+                    <section class="card">
+                        <div class="section-row"><h3>All Summoner's Rift Shop Items</h3><span id="item-result-count" class="muted"></span></div>
+                        <input id="item-search" class="wide-input" type="search" placeholder="Search items…" autocomplete="off">
+                        <div id="item-catalog" class="item-catalog"><div class="empty-state">Loading item data…</div></div>
+                    </section>
+                </section>
+
+                <section class="page-view" data-page-view="runes">
+                    <div class="page-heading"><div><span class="eyebrow">Planner</span><h1>Runes</h1></div><span id="rune-champion-label" class="selection-pill">No champion selected</span></div>
+                    <section class="card">
+                        <div class="section-row"><div><h3>Aura Recommended Rune Page</h3><p class="card-copy">Build a League-valid page: four primary runes, two secondary runes from different rows, and three stat shards.</p></div><div class="button-row compact-row"><button id="apply-recommended-runes" class="btn-cta compact">Use Recommended</button><button id="clear-runes" class="btn-secondary compact">Clear</button></div></div>
+                        <div id="rune-recommendation-status" class="inline-message">Choose a champion to prepare runes.</div>
+                        <div id="rune-rate-sample" class="rate-note">Load Profile matches to calculate honest personal win and pick rates. Global rates are not supplied by Riot Data Dragon.</div>
+                        <div id="rune-summary" class="selection-summary">No runes selected.</div>
+                    </section>
+                    <div id="rune-trees" class="rune-trees"><div class="card empty-state">Loading rune data…</div></div>
+                </section>
+
+                <section class="page-view" data-page-view="live">
+                    <div class="page-heading"><div><span class="eyebrow">LCU + Live Client Data</span><h1>Live Game</h1></div><div id="live-gameflow-phase" class="status-badge">WAITING…</div></div>
+                    <section class="card live-command-card" aria-labelledby="live-metrics-title">
+                        <header class="live-command-header">
+                            <div>
+                                <span class="eyebrow">Native live-client stream</span>
+                                <h3 id="live-metrics-title">Match Command Center</h3>
+                            </div>
+                            <div class="live-metrics-status">
+                                <span id="live-ipc-status" class="status-badge" aria-live="polite">Awaiting League Client</span>
+                                <time id="live-ipc-game-time" class="live-game-clock" aria-label="Game time">00:00</time>
+                            </div>
+                        </header>
+
+                        <div class="live-player-identity">
+                            <span class="live-player-mark" aria-hidden="true">A</span>
+                            <div class="live-player-copy">
+                                <strong id="live-ipc-champion" class="live-player-champion">—</strong>
+                                <span id="live-ipc-summoner" class="live-player-summoner">—</span>
+                            </div>
+                            <span id="live-ipc-level" class="live-level-chip live-metric-unavailable">Level unavailable</span>
+                        </div>
+
+                        <div class="live-metric-grid">
+                            <div><span>KDA</span><strong id="live-ipc-kda" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>CS</span><strong id="live-ipc-cs" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>CS / Minute</span><strong id="live-ipc-cs-minute" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>Kill Participation</span><strong id="live-ipc-kp" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>Current Gold</span><strong id="live-ipc-current-gold" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div class="live-estimated-metric"><span>Held Value · Est.</span><strong id="live-ipc-held-value" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>Earned GPM</span><strong id="live-ipc-earned-gpm" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div class="live-estimated-metric"><span>Held Value / Minute · Est.</span><strong id="live-ipc-held-value-minute" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>DPM</span><strong id="live-ipc-dpm" class="live-metric-unavailable">Unavailable</strong></div>
+                            <div><span>Team Gold Differential</span><strong id="live-ipc-gold-delta" class="live-tone-unavailable">Unavailable</strong></div>
+                        </div>
+
+                        <div class="live-xp-row">
+                            <div><span>XP Progress to Next Level</span><strong id="live-ipc-xp-progress" class="live-metric-unavailable">Unavailable from Live Client API</strong></div>
+                            <progress id="live-ipc-xp-bar" max="100" value="0" aria-label="XP progress unavailable" aria-valuetext="Unavailable" hidden></progress>
+                        </div>
+                        <p id="live-metric-source" class="live-integrity-note" aria-live="polite">Waiting for Aura’s native live-client stream.</p>
+                    </section>
+                    <div class="grid-two-col">
+                        <section class="card live-support-card">
+                            <h3>Champion Select</h3>
+                            <div class="draft-grid">
+                                <div class="team-panel"><h4>Friendly Team</h4><ul id="my-team-list"><li class="muted">Awaiting Champion Select…</li></ul></div>
+                                <div class="team-panel"><h4>Enemy Team</h4><ul id="their-team-list"><li class="muted">Awaiting Champion Select…</li></ul></div>
+                            </div>
+                        </section>
+                        <section class="card live-support-card">
+                            <h3>Live Objectives</h3>
+                            <div class="timer-grid">
+                                <div class="timer-box"><span id="live-objective-dragon-type" class="label">DRAGON</span><span id="live-timer-dragon" class="time-val">READY</span></div>
+                                <div class="timer-box"><span class="label">BARON</span><span id="live-timer-baron" class="time-val">READY</span></div>
+                            </div>
+                            <p class="card-copy">Timers appear once League’s Live Client Data endpoint becomes available in a match.</p>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="page-view" data-page-view="intelligence">
+                    <div class="page-heading">
+                        <div><span class="eyebrow">Evidence-led decision support</span><h1>Aura Intelligence</h1></div>
+                        <div id="advisor-mode-badge" class="status-badge">CHECKING...</div>
+                    </div>
+
+                    <section class="card advisor-control-card">
+                        <div class="advisor-control-copy">
+                            <h3>Match Strategy Analysis</h3>
+                            <p class="card-copy">Ranked recommendations backed by the evidence Aura actually has. Cloud scale is shown only when the loaded source reports it; local analysis is labeled as local.</p>
+                        </div>
+                        <label class="advisor-role-field" for="advisor-role">
+                            <span>Role</span>
+                            <select id="advisor-role">
+                                <option value="auto">Auto-detect</option>
+                                <option value="top">Top</option>
+                                <option value="jungle">Jungle</option>
+                                <option value="middle">Mid</option>
+                                <option value="bottom">ADC</option>
+                                <option value="utility">Support</option>
+                            </select>
+                        </label>
+                        <button id="advisor-refresh" class="btn-secondary">Refresh Data</button>
+                        <div id="advisor-system-status" class="inline-message">Checking advisor data...</div>
+                    </section>
+
+                    <div class="advisor-grid">
+                        <section class="card advisor-stage" aria-labelledby="advisor-draft-title">
+                            <div class="advisor-stage-head">
+                                <div><span class="advisor-step">01 / DRAFT</span><h3 id="advisor-draft-title">Draft Ranking</h3></div>
+                                <button id="advisor-run-draft" class="btn-cta compact">Rank Options</button>
+                            </div>
+                            <p class="card-copy">Ranks three choices using your role, visible Champion Select picks, selected champion, patch, region, and available catalog.</p>
+                            <div id="advisor-draft-status" class="inline-message">Open Champion Select or rank options with the evidence currently available.</div>
+                            <div id="advisor-draft-result" class="advisor-result" aria-live="polite">
+                                <div class="empty-state">No draft ranking generated.</div>
+                            </div>
+                        </section>
+
+                        <section class="card advisor-stage" aria-labelledby="advisor-live-title">
+                            <div class="advisor-stage-head">
+                                <div><span class="advisor-step">02 / LIVE</span><h3 id="advisor-live-title">Live Priorities</h3></div>
+                                <button id="advisor-run-live" class="btn-cta compact">Analyze Live State</button>
+                            </div>
+                            <p class="card-copy">Ranks tactical priorities from visible current-game signals: local game phase, draft, game clock, and objective respawn telemetry. Stale telemetry is identified.</p>
+                            <div id="advisor-live-status" class="inline-message">Enter a match, then analyze the current live state.</div>
+                            <div id="advisor-live-result" class="advisor-result" aria-live="polite">
+                                <div class="empty-state">No live priorities generated.</div>
+                            </div>
+                        </section>
+
+                        <section class="card advisor-stage advisor-post-stage" aria-labelledby="advisor-post-title">
+                            <div class="advisor-stage-head">
+                                <div><span class="advisor-step">03 / REVIEW</span><h3 id="advisor-post-title">Post-Game Verdict</h3></div>
+                                <button id="advisor-run-post" class="btn-cta compact">Analyze Latest Match</button>
+                            </div>
+                            <p class="card-copy">Uses the newest loaded match and recent-profile sample. Load Profile first for a player-specific verdict.</p>
+                            <div id="advisor-post-status" class="inline-message">Load recent matches, then request a verdict.</div>
+                            <div id="advisor-post-result" class="advisor-result" aria-live="polite">
+                                <div class="empty-state">No post-game verdict generated.</div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="advisor-disclaimer">
+                        <strong>Independent decision support.</strong>
+                        Aura isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc. Compare all three choices and make the final decision that fits your goals.
+                    </div>
+                </section>
+
+                <section class="page-view" data-page-view="overlays">
+                    <div class="page-heading"><div><span class="eyebrow">HUD</span><h1>Overlay Controls</h1></div></div>
+                    <section class="card narrow-card overlay-control-card">
+                        <div class="overlay-control-heading">
+                            <div>
+                                <span class="eyebrow">AURA LIVE</span>
+                                <h3>Edge Ribbon</h3>
+                            </div>
+                            <span id="overlay-lock-state" class="status-pill">Locked</span>
+                        </div>
+                        <div id="overlay-status" class="integration-status pending">Checking overlay…</div>
+                        <p class="card-copy">Compact mode uses a 432×52 ribbon (324×39 at 75%). Locked mode passes every mouse click through to League.</p>
+                        <div class="button-row">
+                            <button id="show-overlay" class="btn-cta">Show Overlay</button>
+                            <button id="hide-overlay" class="btn-secondary">Hide Overlay</button>
+                            <button id="toggle-overlay-lock" class="btn-secondary">Unlock HUD Editing</button>
+                        </div>
+                        <div class="overlay-control-grid" aria-label="Overlay layout controls">
+                            <label class="field-label" for="overlay-mode">Active-match layout
+                                <select id="overlay-mode" class="wide-input">
+                                    <option value="compact">Compact ribbon</option>
+                                    <option value="expanded">Expanded telemetry</option>
+                                </select>
+                            </label>
+                            <label class="field-label" for="overlay-scale">HUD scale
+                                <select id="overlay-scale" class="wide-input">
+                                    <option value="75">75%</option>
+                                    <option value="90">90%</option>
+                                    <option value="100">100%</option>
+                                </select>
+                            </label>
+                            <label class="field-label overlay-opacity-field" for="overlay-opacity">Backdrop opacity
+                                <span class="overlay-range-row">
+                                    <input id="overlay-opacity" type="range" min="40" max="100" step="5" value="55">
+                                    <output id="overlay-opacity-value" for="overlay-opacity">55%</output>
+                                </span>
+                            </label>
+                        </div>
+                        <p class="card-copy overlay-safety-note">Aura automatically closes the HUD after a match. If shown while idle, it collapses to a tiny standby pill. Settings stay in RAM for this Aura session.</p>
+                    </section>
+                </section>
+
+                <section class="page-view" data-page-view="settings">
+                    <div class="page-heading"><div><span class="eyebrow">Configuration</span><h1>Settings</h1></div></div>
+                    <div class="grid-two-col">
+                        <section class="card">
+                            <h3>Riot API Credential</h3>
+                            <div id="settings-riot-status" class="integration-status pending">Checking…</div>
+                            <label class="field-label" for="riot-api-key">Fresh Riot API key</label>
+                            <input id="riot-api-key" class="wide-input" type="password" placeholder="RGAPI-…" autocomplete="off" spellcheck="false">
+                            <div class="button-row">
+                                <button id="save-riot-key" class="btn-cta">Save Securely</button>
+                                <button id="clear-riot-key" class="btn-secondary">Clear Saved Key</button>
+                            </div>
+                            <p class="security-note">Saved in Windows Credential Manager, never in Aura’s HTML, logs, or ZIP. Riot development keys expire and should be replaced when Riot rejects them.</p>
+                        </section>
+                        <section class="card">
+                            <h3>Spotify OAuth</h3>
+                            <div id="settings-spotify-status" class="integration-status pending">Checking…</div>
+                            <dl class="config-list">
+                                <div><dt>Redirect URI</dt><dd id="spotify-redirect-value">—</dd></div>
+                                <div><dt>Scopes</dt><dd id="spotify-scopes-value">—</dd></div>
+                            </dl>
+                            <div class="button-row">
+                                <button id="settings-connect-spotify" class="btn-cta">Connect Spotify</button>
+                                <button id="settings-aura-player" class="btn-secondary">Start Aura Player</button>
+                                <button id="settings-browser-player" class="btn-secondary" hidden>Open Browser Player</button>
+                                <button id="settings-open-spotify" class="btn-secondary">Use External Player</button>
+                            </div>
+                            <p class="security-note">Add the redirect URI above exactly in your Spotify dashboard and reconnect once for the streaming scopes. Aura Player uses Spotify's official Web Playback SDK in an isolated, RAM-only window. Spotify Premium is required. If protected media is unavailable in WebView2, Aura offers a local player page in Edge or Chrome; Spotify Desktop and open.spotify.com are not required.</p>
+                        </section>
+                    </div>
+
+                    <section class="card">
+                        <h3>Appearance</h3>
+                        <div class="theme-preview-grid" id="theme-grid">
+                            <button class="theme-card active" data-theme="default"><span class="theme-preview cyber"></span>Cyberpunk</button>
+                            <button class="theme-card" data-theme="eclipse"><span class="theme-preview eclipse"></span>Eclipse</button>
+                            <button class="theme-card" data-theme="forest"><span class="theme-preview forest"></span>Forest</button>
+                            <button class="theme-card" data-theme="minimal"><span class="theme-preview minimal"></span>Minimal</button>
+                        </div>
+                        <div class="setting-block">
+                            <div class="setting-header"><span>Hover glow</span><span id="glow-val">60%</span></div>
+                            <input type="range" id="glow-slider" min="0" max="100" value="60">
+                        </div>
+                    </section>
+
+                    <section class="card">
+                        <h3>Legal &amp; Asset Notice</h3>
+                        <p class="security-note">Aura was created under Riot Games' &quot;Legal Jibber Jabber&quot; policy using assets owned by Riot Games. Riot Games does not endorse or sponsor this project.</p>
+                    </section>
+                </section>
+            </main>
+        </div>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>

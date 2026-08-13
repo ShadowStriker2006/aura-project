@@ -1,0 +1,234 @@
+AURA 0.13.0 VALIDATION REPORT
+=============================
+
+Date: 2026-08-10
+Platform: Windows x64 (MSVC), Tauri v2, WebView2
+
+
+RESULT
+------
+
+PASS. Aura 0.13.0 compiled as an optimized 64-bit Windows application,
+produced an NSIS installer, passed the complete deterministic Rust and
+frontend suites, rendered the expanded dashboard and overlay in browser
+fixtures, and completed bounded native launch smoke tests.
+
+This result does not claim that Riot exposes every requested live metric.
+Exact earned GPM, DPM, total team-gold lead, and XP progress remain visibly
+Unavailable because the documented Live Client Data API does not provide the
+necessary authoritative inputs.
+
+
+IMPLEMENTED SCOPE
+-----------------
+
+- Kept get_summoner_profile (Summoner-V4) and get_league_entries (League-V4)
+  as separate Rust functions, registered IPC commands, requests, caches, and
+  frontend failure paths.
+- Removed load_riot_id_prefs, save_riot_id_prefs, RiotIdPrefs, and every
+  remaining reference to that volatile dead store.
+- Routed frontend commands and dynamic Spotify/overlay/advisor actions through
+  the validated IPC service rather than scattered raw invoke calls.
+- Kept replay map assets offline and pinned through
+  src/assets/maps/manifest.json and generated browser metadata. The live Data
+  Dragon catalog version is display-only and never builds a local filename.
+- Added the typed channels game:state-changed, live:game-tick,
+  live:player-update, and draft:update.
+- Reused one Live Client Data supervisor. During an active game it polls the
+  bounded local endpoints once per second, refreshes objective/player detail
+  every five seconds, and does not scan the process table at 1 Hz.
+- Removed the duplicate legacy aura-objective-timers channel.
+- Added exact Level, KDA, Current Gold, CS, CS/min, and derived KP percentage.
+- Added explicitly estimated observable held value and observable value/minute
+  from current cash plus the listed value/count of every held item. Both are
+  availability- and provenance-gated.
+- Kept earned GPM, DPM, team-gold delta, and XP progress Unavailable instead
+  of presenting a zero or unrelated estimate as measured data.
+- Expanded the main Match Command Center and the click-through overlay to ten
+  low-cost metric cells plus objective timers.
+- Sized the native overlay to 360x540 logical pixels and kept it non-focusable
+  and mouse-click-through.
+- Added a 2 MiB response cap, 500 ms local request timeout, finite-value
+  normalization, three-failure recovery threshold, changed-only DOM updates,
+  and listener/timer cleanup.
+
+
+FRONTEND AND CONTRACT VERIFICATION
+----------------------------------
+
+PASS  JavaScript syntax for the application, IPC service, analytics and
+      overlay components, profile summary, replay renderer, and overlay entry.
+
+PASS  node --test tests/*.test.mjs
+      43 passed, 0 failed, 0 skipped.
+
+Coverage includes:
+
+- direct and dynamic command registration/call matching;
+- Rust/frontend event-channel literal matching;
+- camelCase and defensive snake_case payload normalization;
+- finite/non-negative counter validation and unavailable-metric handling;
+- listener registration rollback and idempotent cleanup;
+- changed-only dashboard and overlay rendering;
+- KDA, current-gold, Level, CS, CS/min, KP, held-value, and objective views;
+- honest earned-GPM, DPM, team-gold, and XP unavailable states;
+- estimate source/provenance gating;
+- Summoner/League endpoint separation and failure isolation invariants;
+- overlay dimensions, click-through, and non-focusable native configuration;
+- forbidden preference/version/channel symbol removal;
+- runtime Riot development-key regression scanning;
+- profile, mastery, rank, Summoner's Rift, ARAM, map manifest, and terrain
+  fallback behavior.
+
+PASS  HTML identity check: main page 141 IDs, overlay 18 IDs, 0 duplicates.
+PASS  Tauri JSON parse.
+PASS  Map verifier: 2/2 pinned assets, filenames, byte counts, SHA-256,
+      PNG signatures, generated metadata, and manifest documentation.
+PASS  Runtime-source scan found no UUID-shaped Riot development key.
+
+
+RUST VERIFICATION
+-----------------
+
+PASS  cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+PASS  cargo check --manifest-path src-tauri/Cargo.toml --all-targets --locked
+PASS  cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+      --locked -- -D warnings
+PASS  cargo test --manifest-path src-tauri/Cargo.toml --all-targets --locked
+      73 passed, 0 failed, 0 ignored.
+PASS  cargo test --manifest-path src-tauri/Cargo.toml --all-targets --release
+      --target x86_64-pc-windows-msvc --locked
+      73 passed, 0 failed, 0 ignored.
+
+Rust coverage includes wire casing, state mapping/deduplication, identity
+matching, KDA/current-gold availability, Level/CS/CS-min/KP calculations,
+complete-inventory estimate gating, observable-value provenance, item filtering,
+objective timers, bounded response handling, and polling cadence.
+
+
+REAL-PAGE BROWSER VERIFICATION
+------------------------------
+
+PASS  Main application rendered at desktop width with the deterministic Tauri
+      event fixture.
+PASS  Main page rendered at the enforced 760px minimum without horizontal
+      overflow; the command-center metrics reflowed to two columns.
+PASS  The 360x540 overlay fixture rendered its complete 322x494 HUD without
+      clipping.
+PASS  Level 11, KDA 7/2/5, CS 142, CS/min 11.3, KP 63.2%, current gold 1475g,
+      estimated held value/minute 413g, identity, game clock, and objective
+      timers rendered from the typed tick.
+PASS  Earned GPM, DPM, team-gold lead, and XP remained visibly Unavailable;
+      the unavailable XP progress bar stayed hidden.
+
+
+FRONTEND PIPELINE MICRO-BENCHMARK
+---------------------------------
+
+Node v24.18.0, 100,000 normalize-plus-view-model iterations:
+
+  Elapsed:              85.063 ms
+  Average:               0.851 microseconds/event
+  Throughput:            1,175,594 events/second
+  Heap delta:            133,760 bytes
+
+This is a synthetic frontend-only benchmark. It proves that payload
+normalization and view-model construction are far below the 1 Hz event budget;
+it is not a League, WebView2, input-latency, frame-time, or native-memory
+guarantee.
+
+
+WINDOWS RELEASE BUILD
+---------------------
+
+PASS  Optimized x86_64-pc-windows-msvc application build.
+PASS  NSIS current-user installer build.
+PASS  Cargo/Tauri/UI/FileVersion/ProductVersion all report 0.13.0.
+PASS  Publisher map verification, input fingerprint, staging, and checksums.
+
+First optimized compile and NSIS bundle after cleaning release inputs:
+  4 minutes 03 seconds.
+
+The first publisher attempt exposed an invalid trailing --locked runner
+argument after Tauri had already built both artifacts. BUILD-WINDOWS.bat was
+corrected to call the Tauri CLI directly; Cargo.lock remains present and the
+separate check/test/clippy commands still use --locked.
+
+Successful end-to-end publisher rerun with compiled dependencies:
+  37.8 seconds (29.35 seconds in the optimized Cargo step).
+
+Unchanged repeat publisher build:
+  3.265 seconds using the verified input fingerprint and cached artifacts.
+
+Artifacts:
+
+Aura.exe
+  Size: 5,757,440 bytes
+  SHA-256: 542a438a962567a10f020bc3951dda1997e98dd75e532195f05a5565834106c5
+  FileVersion/ProductVersion: 0.13.0
+  Authenticode: NotSigned
+
+Aura_0.13.0_x64-setup.exe
+  Size: 2,020,900 bytes
+  SHA-256: fdb4c10f85164f93a92fe86d3064b393a6e055cb6eda00493d86ee53757b7436
+  FileVersion/ProductVersion: 0.13.0
+  Authenticode: NotSigned
+
+
+NATIVE SMOKE TEST
+-----------------
+
+PASS  Portable Aura.exe remained alive and responsive for eight seconds.
+PASS  The Aura main window and a new WebView2 process initialized.
+PASS  Idle Aura CPU usage was 0.0000 seconds across the sampled four seconds.
+PASS  The exact test Aura PID was stopped and its observed WebView2 process
+      exited with it.
+
+Observed during bounded launches on this machine:
+
+  Aura process working set:       36,704,256 bytes (35.00 MiB)
+  Aura process private memory:     6,578,176 bytes (6.27 MiB)
+  WebView2 process working set:   76,488,704 bytes (72.95 MiB)
+
+The processes were sampled during separate bounded launches, so the values are
+not presented as a rigorous total. They do prove that the historical sub-30 MiB
+whole-application aspiration is not met by this Windows/WebView2 environment.
+
+
+SECURITY AND STRUCTURAL INVARIANTS
+----------------------------------
+
+PASS  No UUID-shaped Riot development key is embedded in runtime source.
+PASS  No MAP_ASSET_VERSION constant exists.
+PASS  No load_riot_id_prefs, save_riot_id_prefs, or RiotIdPrefs symbol exists.
+PASS  No aura-objective-timers channel remains.
+PASS  get_summoner_profile and get_league_entries remain separate registered
+      commands and separate Rust functions.
+PASS  Dynamic command sets are hard-coded, validated, and routed through the
+      shared IPC client.
+PASS  Live strings reach the DOM through textContent, not innerHTML.
+PASS  Exact earned GPM, DPM, team total gold, and XP are not fabricated.
+
+
+KNOWN RELEASE LIMITS
+--------------------
+
+1. A real League custom/normal match was not available. Endpoint accuracy,
+   overlay behavior in exclusive/borderless modes, input latency, frame time,
+   CPU, RAM, and network overhead still need acceptance testing on the intended
+   low-spec target while League is running.
+2. The exact 360x540 logical overlay and 760px main-page layouts were visually
+   tested. Native 100%, 125%, 150%, and 200% DPI acceptance was not completed.
+3. A clean installer install/upgrade/uninstall cycle was not run because that
+   would mutate the user's installed application state. The NSIS package was
+   successfully generated and version/hash inspected.
+4. Local artifacts are intentionally unsigned test builds. A public release
+   must use the documented signed CI workflow and a valid Authenticode
+   certificate/timestamp.
+5. Public Riot API distribution requires product registration and an approved
+   server-side production-key design. Development keys expire and must never be
+   embedded in a desktop binary.
+6. Riot's documented Live Client Data fields do not provide the authoritative
+   inputs for exact earned GPM, DPM, team-gold lead, or XP progress. Those wire
+   fields remain contract-compatible but unavailable until a trustworthy data
+   source is introduced.

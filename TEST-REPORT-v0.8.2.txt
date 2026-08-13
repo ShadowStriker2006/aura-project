@@ -1,0 +1,99 @@
+AURA 0.8.2 VALIDATION REPORT
+============================
+
+Date: 2026-08-02
+Target: 64-bit Windows application plus NSIS installer
+Result: PASS, with the manual/public-release limits listed below
+
+
+NATIVE DROPDOWN DEFECT
+----------------------
+
+Reported symptom:
+
+The Riot server selector opened with a white native WebView2 popup while Aura's
+option text remained white. Unselected servers were therefore invisible. The
+same native-control mismatch could affect match filters, advisor roles, and the
+Spotify device selector.
+
+Fix:
+
+- Declared `color-scheme: dark` at the application root and on every select.
+- Gave every select an explicit dark fallback background and readable text.
+- Gave normal options a #f8fafc foreground over #11111d.
+- Gave disabled options a #94a3b8 foreground over #11111d.
+- Gave selected options a white foreground over #4c1d95.
+- Applied the rules globally instead of patching only the Riot server selector.
+
+PASS  Normal-option contrast:   17.89:1
+PASS  Disabled-option contrast:  7.30:1
+PASS  Selected-option contrast: 10.95:1
+PASS  All three exceed the 4.5:1 readable-text validation threshold
+PASS  Every native select and option is covered by the global dark rules
+PASS  Packaged app accessibility tree reports Aura 0.8.2
+
+
+AUTOMATED APPLICATION VALIDATION
+--------------------------------
+
+PASS  cargo check --locked
+PASS  cargo fmt --all -- --check
+PASS  cargo clippy --locked --all-targets -- -D warnings
+PASS  Rust tests: 40 passed, 0 failed
+PASS  src/main.js JavaScript syntax
+PASS  tauri.conf.json JSON decoding
+PASS  Dropdown CSS rule and contrast assertions
+
+The Rust suite covers Spotify PKCE/callback parsing, protected-player security,
+stale-session isolation, LCU account discovery, Riot route selection and match
+analytics, configuration validation, and Aura Intelligence provenance rules.
+
+
+BUILD AND NATIVE SMOKE TEST
+---------------------------
+
+PASS  Optimized x86_64-pc-windows-msvc application built
+PASS  NSIS installer built: Aura_0.8.2_x64-setup.exe
+PASS  Portable executable built: Aura.exe
+PASS  FileVersion/ProductVersion: 0.8.2
+PASS  Packaged native app launched and remained responsive
+PASS  Native smoke working set: 29.3 MB
+PASS  Native smoke private memory: 5.7 MB
+PASS  Cold publisher build completed in about 151 seconds
+PASS  Unchanged warm publisher build reused verified artifacts in 4.66 seconds
+
+
+SECURITY AND RELEASE STATUS
+---------------------------
+
+PASS  Riot API key remains outside frontend code and distributed binaries
+PASS  Spotify access/refresh tokens remain volatile Rust backend state
+PASS  Spotify Client ID is a public OAuth identifier; no client secret exists
+PASS  Source and release artifacts contain no Riot-key-shaped secret
+
+Portable Aura.exe SHA-256:
+  3fb7a66cb2ce39436a4d3e7d686bba9a01cbf3b9746924687dbda9645ca4389d
+
+Installer SHA-256:
+  b841e65fb827b99f209f7ba22023ccaf16b26db8d0807f0602f7dc4bc3c6a3b3
+
+
+RETAINED 0.8.1 SPOTIFY FIX
+--------------------------
+
+Aura 0.8.2 retains the corrected Spotify protected-media delegation, strict
+Spotify-only CSP, RAM-only loopback nonce/token bridge, generation-safe player
+events, and fresh-session browser fallback introduced in 0.8.1.
+
+
+MANUAL / PUBLIC-RELEASE LIMITS
+------------------------------
+
+1. Reopen the Riot server selector after installing 0.8.2 to verify the native
+   popup on the user's exact Windows display/theme configuration.
+2. Clean-user installer install, upgrade, and uninstall should be tested before
+   broad public distribution.
+3. These local files are not Authenticode-signed. A public installer must be
+   signed and timestamped through the documented protected workflow.
+4. Spotify Premium is mandatory for Spotify's Web Playback SDK.
+5. Riot development API keys expire and must not be embedded in public builds.

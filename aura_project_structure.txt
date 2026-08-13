@@ -1,0 +1,283 @@
+AURA PROJECT - IMPLEMENTED ARCHITECTURE AND IPC CONTRACT
+========================================================
+
+This document describes the structure used by the shipping vanilla-JavaScript
+Tauri application. It preserves the same service/type boundaries a React build
+would use without adding React, a Node runtime, or a frontend bundler to the
+installed application.
+
+
+1. IMPLEMENTED DIRECTORY LAYOUT
+-------------------------------
+
+AURA-PROJECT/
+|-- src-tauri/                         Native Rust core
+|   |-- src/
+|   |   |-- main.rs                    Tauri bootstrap and command registration
+|   |   |-- live_client/
+|   |   |   `-- mod.rs                 Typed event payloads and emitters
+|   |   |-- game/
+|   |   |   `-- telemetry.rs           One local Live Client polling supervisor
+|   |   |-- lcu/                       League Client identity/gameflow watcher
+|   |   |-- overlay.rs                 Overlay window lifecycle
+|   |   |-- riotapi.rs                 Public Riot API profile/rank/match commands
+|   |   |-- riotapi/timeline.rs        Post-match timeline normalization
+|   |   |-- spotify/                   OAuth, Connect, and embedded player services
+|   |   `-- perf/                      Windows process/performance controls
+|   |-- capabilities/                  Tauri v2 permissions
+|   |-- Cargo.toml
+|   `-- tauri.conf.json
+|-- src/                               Static webview frontend
+|   |-- assets/maps/
+|   |   |-- manifest.json              Canonical pinned local-map metadata
+|   |   |-- map11-*.png
+|   |   `-- map12-*.png
+|   |-- components/analytics/
+|   |   `-- live-game-metrics.js       Pure live-HUD view-model and DOM renderer
+|   |-- components/overlay/
+|   |   `-- live-overlay.js            Compact overlay view-model and safe renderer
+|   |-- services/
+|   |   `-- ipc.js                     Validated invoke/listen boundary and cleanup
+|   |-- types/
+|   |   `-- ipc.ts                     Canonical TypeScript wire interfaces
+|   |-- index.html                     Application views and live metrics markup
+|   |-- main.js                        Application controller and event integration
+|   |-- map-control-replay.js
+|   |-- overlay.html
+|   |-- overlay.js
+|   `-- style.css
+|-- tests/                             Node built-in test suites and UI fixtures
+|-- scripts/
+|   |-- BUILD-FINGERPRINT.ps1
+|   |-- BENCH-LIVE-PIPELINE.mjs         Synthetic frontend transform benchmark
+|   `-- VERIFY-MAP-ASSETS.ps1
+|-- LIVE-METRICS-AND-OVERLAY.md         Metric provenance and acceptance guide
+|-- BUILD-WINDOWS.bat
+`-- .github/workflows/release-windows.yml
+
+React-equivalent folders from the original proposal (layouts, views, and
+stores) are not created as empty scaffolding. The existing application is a
+vanilla static frontend, so an empty React-shaped tree would be dead code. If a
+future React frontend is introduced, src/services/ipc.js and src/types/ipc.ts
+remain the framework-independent boundary and can be imported by a store or
+view component.
+
+
+2. IPC EVENT CHANNELS
+---------------------
+
+game:state-changed
+  Producer: LCU initial gameflow query and websocket watcher, with the local
+  game poller as an IN_GAME/ENDED fallback.
+  Frequency: transition only.
+  Payload: IN_LOBBY | CHAMP_SELECT | IN_GAME | ENDED.
+
+live:game-tick
+  Producer: the single game/telemetry.rs supervisor.
+  Frequency: once per second while the local Live Client Data API is active.
+  Payload: LiveGameTickPayload in src/types/ipc.ts.
+  Exact/derived fields: game time, current gold, KDA, level, CS, CS/min, and
+  kill participation when their required source fields are present.
+  Estimate fields: observable held value and observable held value/minute,
+  each accompanied by a metricSources provenance value.
+  Unavailable fields: DPM, exact team-gold differential, exact earned GPM, and
+  XP progress. Their compatibility values must never be rendered unless the
+  matching metricAvailability flag is true.
+
+live:player-update
+  Producer: the same telemetry supervisor.
+  Frequency: every five seconds while in game.
+  Payload: one PlayerStatsPayload event per currently visible player.
+
+draft:update
+  Producer: the existing LCU websocket when the Champion Select session
+  resource changes.
+  Frequency: pick/ban session changes.
+  Payload: the local LCU Champion Select session JSON. Existing lcu-event is
+  retained during migration so current UI behavior does not regress.
+
+The former aura-objective-timers compatibility channel is removed. Dashboard,
+overlay, home timers, and advisor telemetry all reuse the normalized objective
+fields in live:game-tick, so one native snapshot creates one typed event path.
+
+
+3. FRONTEND INTEGRATION
+-----------------------
+
+src/types/ipc.ts is the type-only, canonical schema. The browser does not load
+or transpile TypeScript. src/services/ipc.js is the runtime boundary used by
+the vanilla frontend. It:
+
+- validates command names before dynamic invocation;
+- applies one timeout implementation to literal and wrapper-dispatched calls;
+- normalizes untrusted event payloads before they reach application state;
+- subscribes to game:state-changed and live:game-tick; and
+- returns one idempotent cleanup function for all native listeners.
+
+src/components/analytics/live-game-metrics.js converts a normalized tick into a
+small view model and renders via textContent only. It compares text, attributes,
+classes, progress values, and hidden state before mutating the DOM, so an
+unchanged one-second frame does not cause avoidable work. src/main.js owns
+application state, updates the Live Game page, and tears down listeners before
+the webview unloads.
+
+src/components/overlay/live-overlay.js reuses the same normalized tick and
+live-game view model rather than reinterpreting native payloads. overlay.js
+subscribes through src/services/ipc.js, owns an idempotent listener cleanup,
+merges CS and CS/min, and coordinates standby, compact, and expanded layout
+state with the native window. The compact ribbon keeps the clock, KDA,
+team-gold state, Dragon, and Baron visible. The expanded panel adds identity,
+KP, current gold, the labeled held-value rate estimate, and exact-metric
+unavailable states.
+
+
+4. RUST INTEGRATION
+-------------------
+
+src-tauri/src/live_client/mod.rs owns the stable camelCase wire structures and
+event names. Emitters return Result<(), String>; callers log a scoped error
+instead of silently discarding an emission failure.
+
+src-tauri/src/game/telemetry.rs is the only owner of local port-2999 polling.
+It uses fixed loopback HTTPS endpoints, bounded request timeouts, one shared
+HTTP client, and no disk cache. The per-second requests are issued concurrently
+without requesting the same endpoint twice in one tick. Objective events are
+refreshed every five seconds; player-update events are emitted every five
+seconds from the current per-second player snapshot. While a match is active,
+the supervisor deliberately skips Windows process-table scans and uses three
+consecutive gamestats failures to detect shutdown. When idle, a low-frequency
+process scan prevents needless requests to a closed local endpoint.
+
+
+5. DATA-QUALITY BOUNDARY
+-----------------------
+
+Riot's official local Live Client API exposes game time, active-player current
+gold, player KDA/CS/level/items, team, and objective events. Aura reports level
+and CS directly. CS/min is CS * 60 / game time. Kill participation is
+(kills + assists) / the sum of teammate kills * 100. Both are exact arithmetic
+over the current local snapshot; KP is unavailable when team kills are zero or
+any required source field is absent.
+
+Aura also exposes an explicitly estimated observable-held-value rate:
+
+  observableHeldValue = currentGold + sum(item.price * item.count)
+  observableValuePerMinute = observableHeldValue * 60 / gameTime
+
+The estimate is available only when current gold, the item list, every listed
+item price/count, and a positive game time are present. Its source enum is
+CURRENT_GOLD_PLUS_CURRENT_INVENTORY_LISTED_VALUE. It can decrease after selling
+or consuming items and cannot reconstruct previously spent, sold, consumed,
+transformed, or otherwise unobservable value. It is not earned GPM.
+
+The local endpoint does not expose live damage dealt to champions, exact total
+team gold, lifetime earned gold, or progress within the current XP level. Aura
+therefore does not fabricate DPM, a team-gold lead, earned GPM, or XP progress.
+
+The required numeric fields remain in LiveGameTickPayload for the specified IPC
+contract. metricAvailability flags state whether those values were actually
+measured. The frontend renders "Unavailable" when a flag is false. This makes a
+future truthful data source backward-compatible without presenting estimates
+as facts.
+
+
+6. RIOT COMMAND ISOLATION
+-------------------------
+
+get_summoner_profile and get_league_entries are separate registered commands.
+The former requests Summoner-V4 profile icon/level data only; the latter
+requests League-V4 ranked entries. A rank endpoint error cannot suppress a
+valid profile or match-history response.
+
+The obsolete process-local Riot preference API was removed completely. There
+are no load_riot_id_prefs, save_riot_id_prefs, or RiotIdPrefs symbols.
+
+
+7. MAP-ASSET ISOLATION
+----------------------
+
+Replay map filenames are resolved only from src/assets/maps/manifest.json. Its
+top-level metadata pins the Data Dragon version; each map entry records the map
+ID, name, filename, source URL, byte count, and SHA-256 digest. Runtime JavaScript
+metadata is generated from this manifest and checked against it by CI. The live
+Data Dragon catalog version is display-only and is never concatenated into a
+local path. scripts/VERIFY-MAP-ASSETS.ps1 rejects missing, corrupt, mismatched,
+or orphaned map files before a build.
+
+
+8. VERIFICATION
+---------------
+
+Frontend source modules are tested directly with Node's built-in runner:
+
+  node --test tests/*.test.mjs
+
+Rust payload serialization, LCU phase mapping, live-response decoding, player
+normalization, and objective calculations are ordinary documented #[test]
+tests and run with:
+
+  cargo test --manifest-path src-tauri/Cargo.toml --all-targets --locked
+
+The Windows release workflow additionally runs JavaScript syntax checks, the
+map manifest verifier, duplicate-ID validation, rustfmt, clippy with warnings
+denied, optimized Rust tests, and the Tauri/NSIS release build.
+
+scripts/BENCH-LIVE-PIPELINE.mjs measures only frontend payload normalization and
+view-model construction with a deterministic synthetic payload:
+
+  node scripts/BENCH-LIVE-PIPELINE.mjs
+
+Its elapsed time, throughput, and heap delta are diagnostic comparisons, not a
+League/WebView/native latency guarantee. Do not use this result to claim zero
+input lag, zero frame drops, or a RAM target on player hardware.
+
+
+9. OVERLAY WINDOW CONTRACT
+--------------------------
+
+The overlay is a borderless, non-resizable Tauri window positioned near the
+current monitor's top-right edge. Its native logical size follows the layout:
+32x32 standby, 432x52 compact, or 520x150 expanded at 100%. Both the WebView and
+native window use the same 75%, 90%, or 100% scale preset, preventing a large
+transparent window from remaining around a visually scaled-down HUD. It is
+created only when shown and closed when hidden so the second WebView does not
+consume idle memory.
+
+The overlay is always-on-top and locked by default with
+set_ignore_cursor_events(true) plus set_focusable(false). Because a
+click-through WebView cannot receive its own unlock click, the main dashboard
+and native tray are the escape hatches. Unlocked mode accepts its compact/full,
+40-100% opacity, and scale controls; Lock HUD restores pass-through. Closing the
+overlay re-arms the lock before any later automatic show. Layout state is
+volatile RAM only, and this build does not register a global hotkey.
+
+Click-through does not guarantee visibility over every exclusive-fullscreen
+rendering path; real-game acceptance must cover the intended League display
+mode and Windows DPI/monitor layout.
+
+
+10. REAL-MATCH PERFORMANCE ACCEPTANCE
+-------------------------------------
+
+The implementation is designed to reduce wakeups and duplicate work, but no
+source review or synthetic benchmark can prove zero input lag or zero frame
+drops. Before release, test on the actual low-spec target computer and record:
+
+- Aura main and overlay working set before League, during Champion Select,
+  during an active match, and after the overlay is closed;
+- Aura CPU usage and request cadence while idle and during a match;
+- League frame-time percentiles with Aura closed, dashboard only, and overlay
+  visible, using the same replay/training scenario and graphics settings;
+- one-second game-tick cadence, five-second event refreshes, and five-second
+  player updates without duplicate endpoint requests;
+- standby/compact/expanded geometry at 75%, 90%, and 100% HUD scale;
+- overlay create/show/hide/recreate behavior at 100%, 125%, 150%, and 200% DPI;
+- locked click-through, dashboard/tray unlock, and safe lock reset in windowed,
+  borderless, and the intended fullscreen mode; and
+- graceful behavior across match start, transient port-2999 failures, match
+  end, League restart, sleep/resume, and monitor changes.
+
+Record machine specifications, Windows/WebView2 versions, League patch,
+sampling interval, scenario, and raw measurements. Publish the numbers as
+measured results, not universal guarantees. See LIVE-METRICS-AND-OVERLAY.md for
+the full data-provenance and acceptance procedure.

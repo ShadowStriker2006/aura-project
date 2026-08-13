@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Aura Map Replay Harness</title>
+  <link rel="stylesheet" href="../src/style.css">
+  <style>
+    body { margin: 0; padding: 28px; color: #f8fafc; background: #070711; font-family: Inter, system-ui, sans-serif; }
+    main { width: min(980px, 100%); margin: 0 auto; }
+    h1 { margin: 0 0 18px; font-size: 20px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Dynamic Map Control Replay test fixture</h1>
+    <section class="match-map-replay">
+      <div class="match-detail-section-heading">
+        <div><span class="eyebrow">Post-match timeline</span><h3>Dynamic Map Control Replay</h3></div>
+        <span class="map-replay-source">Fixture · no Riot request</span>
+      </div>
+      <div id="replay" class="map-replay-root"></div>
+    </section>
+  </main>
+  <script type="module">
+    import { mountMapControlReplay } from '../src/map-control-replay.js';
+    const fixtureMode = new URLSearchParams(location.search).get('mode') || 'control';
+    const movementOnly = fixtureMode === 'movement';
+    const aramControl = fixtureMode === 'aram';
+    const participants = Array.from({ length: 10 }, (_, index) => ({
+      participant_id: index + 1,
+      team_id: index < 5 ? 100 : 200,
+      champion_name: ['Ahri', 'LeeSin', 'Garen', 'Jinx', 'Nautilus', 'Zed', 'Vi', 'Darius', 'Caitlyn', 'Lulu'][index],
+    }));
+    const frames = Array.from({ length: 31 }, (_, minute) => ({
+      timestamp_ms: minute * 60000,
+      players: participants.map((participant, index) => {
+        const blue = participant.team_id === 100;
+        const lane = index % 5;
+        const progress = Math.min(1, minute / 30);
+        const baseX = aramControl
+          ? (blue ? 1065 + (progress * 7600) : 11984 - (progress * 4600))
+          : (blue ? 1200 + (progress * 9400) : 13800 - (progress * 7600));
+        const baseY = aramControl
+          ? (blue ? 981 + (progress * 7200) : 11459 - (progress * 4300))
+          : (blue ? 1300 + (progress * 9000) : 13700 - (progress * 7500));
+        const spread = aramControl ? 75 : 520;
+        return {
+          participant_id: participant.participant_id,
+          x: baseX + ((lane - 2) * spread) + Math.sin(minute + index) * (aramControl ? 90 : 380),
+          y: baseY + ((2 - lane) * spread) + Math.cos((minute * .7) + index) * (aramControl ? 90 : 420),
+          level: Math.min(18, 1 + Math.floor(minute / 2)),
+          total_gold: 500 + (minute * (blue ? 430 : 390)) + (index * 45),
+          cs: minute * 7,
+        };
+      }),
+      teams: [
+        { team_id: 100, kills: Math.floor(minute / 3), gold: 2500 + (minute * 2200), turrets: Math.floor(minute / 7) },
+        { team_id: 200, kills: Math.floor(minute / 4), gold: 2500 + (minute * 2050), turrets: Math.floor(minute / 9) },
+      ],
+    }));
+    const events = aramControl ? [
+      { id: 'a0', timestamp_ms: 185000, kind: 'champion_kill', team_id: 100, detail: '' },
+      { id: 'a1', timestamp_ms: 725000, kind: 'turret', team_id: 100, detail: 'OUTER_TURRET' },
+      { id: 'a2', timestamp_ms: 1240000, kind: 'inhibitor', team_id: 200, detail: 'INHIBITOR_BUILDING' },
+    ] : [
+      { id: 'e0', timestamp_ms: 185000, kind: 'champion_kill', team_id: 100, detail: '' },
+      { id: 'e1', timestamp_ms: 305000, kind: 'dragon', team_id: 100, detail: 'INFERNAL_DRAGON' },
+      { id: 'e2', timestamp_ms: 515000, kind: 'void_grubs', team_id: 200, detail: 'HORDE' },
+      { id: 'e3', timestamp_ms: 725000, kind: 'turret', team_id: 100, detail: 'MID_LANE OUTER_TURRET' },
+      { id: 'e4', timestamp_ms: 1240000, kind: 'baron', team_id: 100, detail: 'BARON_NASHOR' },
+    ];
+    const replay = {
+      schema_version: 2,
+      match_id: 'FIXTURE_1',
+      game_version: '16.15.1.1234',
+      map_id: movementOnly ? 14 : aramControl ? 12 : 11,
+      frame_interval_ms: 60000,
+      duration_ms: 1800000,
+      coordinates: aramControl
+        ? { model_id: 'howling_abyss_rect_v1', min_x: 0, max_x: 12800, min_y: 0, max_y: 12800, invert_y_for_canvas: true }
+        : { model_id: movementOnly ? 'observed_extent_v1' : 'summoners_rift_rect_v1', min_x: 0, max_x: 15000, min_y: 0, max_y: 15000, invert_y_for_canvas: true },
+      control_model: aramControl
+        ? { id: 'howling_abyss_linear_v1', topology: 'linear_lane', blue_base: { x: 1065, y: 981 }, red_base: { x: 11984, y: 11459 }, anchor_provenance: 'sanitized_fixture' }
+        : movementOnly ? null : { id: 'summoners_rift_radial_v1', topology: 'two_dimensional', blue_base: { x: 900, y: 900 }, red_base: { x: 14100, y: 14100 }, anchor_provenance: 'static_fixture' },
+      participants,
+      frames,
+      events,
+      availability: movementOnly
+        ? {
+            positions: true,
+            control_estimate: false,
+            positions_reason: null,
+            control_reason: 'Territorial pressure is not calibrated for this fixture map.',
+            reason: null,
+          }
+        : {
+            positions: true,
+            control_estimate: true,
+            positions_reason: null,
+            control_reason: null,
+            reason: null,
+          },
+    };
+    window.replayController = mountMapControlReplay(document.querySelector('#replay'), replay);
+    document.body.dataset.fixtureMode = fixtureMode;
+    document.body.dataset.ready = 'true';
+  </script>
+</body>
+</html>

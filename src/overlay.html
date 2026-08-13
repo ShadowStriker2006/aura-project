@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura Live Overlay</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="overlay-page" data-overlay-mode="standby" data-overlay-locked="true">
+  <aside id="overlay-widget" class="overlay-ribbon" aria-label="Aura live game overlay">
+    <div class="overlay-standby-pill" role="status" aria-label="Aura is waiting for a League match" title="Aura is standing by">
+      <span aria-hidden="true">A</span>
+    </div>
+
+    <div class="overlay-shell">
+      <header class="overlay-core-row">
+        <div class="overlay-brand" aria-label="Aura Live">
+          <span class="overlay-brand-mark" aria-hidden="true">A</span>
+          <span id="overlay-live-dot" class="overlay-live-dot" aria-hidden="true"></span>
+          <span id="overlay-status" class="overlay-sr-only" aria-live="polite">Awaiting League Client</span>
+        </div>
+
+        <div class="overlay-core-metric overlay-clock-metric">
+          <span class="overlay-core-label">Time</span>
+          <time id="overlay-game-time" class="overlay-core-value">00:00</time>
+        </div>
+
+        <div class="overlay-core-metric overlay-kda-metric">
+          <span class="overlay-core-label">KDA</span>
+          <strong id="overlay-kda" class="overlay-core-value">N/A</strong>
+        </div>
+
+        <div class="overlay-core-metric overlay-gold-metric">
+          <span class="overlay-core-label">Gold lead</span>
+          <strong id="overlay-team-gold" class="overlay-core-value">N/A</strong>
+        </div>
+
+        <div class="overlay-objectives" aria-label="Objective timers">
+          <span class="overlay-objective" title="Dragon timer">
+            <abbr id="overlay-dragon-type" title="Dragon">D</abbr>
+            <strong id="overlay-dragon" class="state-ready">READY</strong>
+          </span>
+          <span class="overlay-objective" title="Baron Nashor timer">
+            <abbr title="Baron Nashor">B</abbr>
+            <strong id="overlay-baron" class="state-ready">READY</strong>
+          </span>
+        </div>
+
+        <button
+          id="overlay-mode-toggle"
+          class="overlay-icon-button overlay-expand-button"
+          type="button"
+          aria-controls="overlay-expanded-panel"
+          aria-expanded="false"
+          aria-label="Show full live statistics"
+          title="Show full live statistics"
+        >
+          <span aria-hidden="true">v</span>
+        </button>
+      </header>
+
+      <section id="overlay-expanded-panel" class="overlay-expanded-panel" aria-label="Full live telemetry">
+        <div class="overlay-player-row">
+          <span id="overlay-champion" class="overlay-champion">No active match</span>
+          <span id="overlay-level" class="overlay-level">Level unavailable</span>
+          <span id="overlay-summoner" class="overlay-summoner">Aura is standing by</span>
+        </div>
+
+        <div class="overlay-telemetry-grid">
+          <div class="overlay-detail-metric">
+            <span>CS</span>
+            <strong id="overlay-cs-combined">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric">
+            <span>KP</span>
+            <strong id="overlay-kp">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric">
+            <span>Current</span>
+            <strong id="overlay-current-gold">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric overlay-estimated-metric">
+            <span>Held / min - est.</span>
+            <strong id="overlay-held-value-minute">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric">
+            <span>Earned GPM</span>
+            <strong id="overlay-earned-gpm">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric">
+            <span>DPM</span>
+            <strong id="overlay-dpm">N/A</strong>
+          </div>
+          <div class="overlay-detail-metric overlay-xp-metric">
+            <span>XP progress</span>
+            <strong id="overlay-xp">N/A</strong>
+            <progress id="overlay-xp-progress" max="100" value="0" hidden>0%</progress>
+          </div>
+        </div>
+
+        <div class="overlay-controls" aria-label="Overlay appearance controls">
+          <label class="overlay-opacity-control" for="overlay-opacity">
+            <span>Opacity</span>
+            <input id="overlay-opacity" type="range" min="40" max="100" step="5" value="55">
+            <output id="overlay-opacity-value" for="overlay-opacity">55%</output>
+          </label>
+
+          <div class="overlay-scale-control" role="group" aria-label="Overlay scale">
+            <span>Scale</span>
+            <button class="overlay-scale-button" type="button" data-scale="75" aria-pressed="false">75%</button>
+            <button class="overlay-scale-button" type="button" data-scale="90" aria-pressed="false">90%</button>
+            <button class="overlay-scale-button" type="button" data-scale="100" aria-pressed="true">100%</button>
+          </div>
+
+          <button id="overlay-lock-button" class="overlay-lock-button" type="button" title="Lock and make the HUD click-through">
+            Lock HUD
+          </button>
+          <span class="overlay-locked-copy" role="status">Locked - unlock from Aura or tray</span>
+        </div>
+      </section>
+    </div>
+  </aside>
+
+  <script type="module" src="overlay.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+AURA-PROJECT — PUBLISHER BUILD
+
+Players do not run this file or BUILD-WINDOWS.bat. Give players the finished
+Aura_<version>_x64-setup.exe installer only.
+
+1. On Windows, install:
+   - Rust from https://rustup.rs/
+   - Microsoft C++ Build Tools with "Desktop development with C++"
+   - Microsoft Edge WebView2 Runtime (normally already present on Windows 10/11)
+
+2. Double-click BUILD-WINDOWS.bat.
+
+   If all executable inputs are unchanged, Aura safely reuses the exact cached
+   version and only stages/hashes it. Delete src-tauri\target when a deliberately
+   clean publisher build is required.
+
+3. Finished files appear in dist\release\<version>:
+   - Aura.exe              portable application executable
+   - Aura_*_x64-setup.exe  Windows installer
+   - SHA256SUMS.txt         integrity checksums
+
+The application and installer use the supplied Aura icon.
+Local builds are not Authenticode-signed. Public distribution requires a
+code-signing certificate and a protected signing workflow.
+
+For normal releases, push a matching version tag to GitHub and let
+.github\workflows\release-windows.yml build and publish the installer. See
+PUBLISHING.md.
+
+Before using Riot match history, open Aura Settings and save a fresh key in
+Windows Credential Manager. RIOT_API_KEY remains available as an optional
+environment-variable override. Never place a Riot key in source code or the
+installer. Connect Spotify once after upgrading so the Web Playback scopes are
+granted. See CONFIGURATION.md for the redirect, Aura Player requirements, and
+full setup.

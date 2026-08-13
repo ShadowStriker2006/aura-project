@@ -1,0 +1,147 @@
+AURA 0.10.0 VALIDATION REPORT
+=============================
+
+Date: 2026-08-08
+Target: 64-bit Windows application plus NSIS installer
+Result: PASS, with the live-data, signing, installer, and memory limits below
+
+
+OFFICIAL RANK AND CHAMPION MASTERY
+---------------------------------
+
+Implemented:
+
+- Typed Champion-Mastery-V4 platform-route request using encrypted PUUID.
+- Rust-only X-Riot-Token handling with no API key in frontend code or logs.
+- Streaming 16 MiB response limit and bounded network timeout.
+- Two-minute, per-PUUID, volatile RAM cache cleared on identity/key changes.
+- ID filtering, points-descending/ID-ascending sorting, reliable HashSet
+  deduplication, and a 200-entry backend cap.
+- Independent mastery request lifecycle: mastery failure does not fail rank or
+  match history.
+- Generation and selected-profile guards against late old-player responses.
+- Top-five Profile mastery cards linked to champion details.
+- Champion detail mastery level, points, progression, and last-played display.
+- Home hero summary for official Solo/Duo rank, top mastery, and account level.
+- Official LP, wins, losses, win rate, mini-series, hot-streak, veteran, and
+  new-ranked-entrant status display for Solo/Duo and Flex.
+- Explicit loading, empty, unavailable, missing-key, and bad-identity states.
+- Data Dragon readiness gating and rerendering for mastery portraits/actions.
+- Accessible rank groups, mastery live status, and non-star-only mastery text.
+
+
+AUTOMATED VALIDATION
+--------------------
+
+PASS  cargo fmt --all -- --check
+PASS  cargo check --locked --all-targets
+PASS  cargo clippy --locked --all-targets --target x86_64-pc-windows-msvc
+      -- -D warnings
+PASS  release cargo test --locked --all-targets --target
+      x86_64-pc-windows-msvc: 51 passed, 0 failed
+PASS  src/main.js JavaScript syntax
+PASS  src/profile-summary.js JavaScript syntax
+PASS  src/map-control-replay.js JavaScript syntax
+PASS  src/overlay.js JavaScript syntax
+PASS  browser fixture JavaScript and Python syntax
+PASS  profile/rank/mastery model tests: 7 passed, 0 failed
+PASS  map-control model tests: 6 passed, 0 failed
+PASS  total JavaScript tests: 13 passed, 0 failed
+PASS  duplicate HTML ID scan: none
+PASS  Cargo.toml, Cargo.lock, Tauri config, UI, and installer version: 0.10.0
+PASS  release workflow checks the new module and test suite
+
+The five new Rust test groups cover the exact EUN1 mastery URL, current mastery
+JSON without legacy summoner-id fields, current RankedEntry flags and optional
+miniSeries, snake_case frontend serialization, and mastery filtering, sorting,
+deduplication, and the 200-row cap.
+
+The seven pure JavaScript tests cover camelCase/snake_case compatibility, LP 0,
+queue order, honest unranked states, mini-series sanitization, rank badges,
+mastery filtering/deduplication/tie ordering/capping, champion ID 62 image-name
+mapping, unknown champion fallback, compact point labels, and Home summaries.
+
+
+REAL-PAGE BROWSER VALIDATION
+----------------------------
+
+PASS  Actual index.html, style.css, main.js, and profile-summary.js loaded with
+      a deterministic Tauri command fixture
+PASS  Home showed EMERALD II, 0 LP, 48W/32L, 60% WR, Wukong Mastery 7, and
+      account level 321
+PASS  Profile showed ordered Solo/Flex records and all fixture status badges
+PASS  Three mastery cards rendered with portraits, level, points, and dates
+PASS  Wukong mastery card opened the correct Champion detail page
+PASS  Champion detail showed Mastery 7 and 1,250,000 points
+PASS  Mastery rejection left level, rank, and match status intact
+PASS  Identity failure ended at Profile unavailable instead of loading forever
+PASS  Missing Riot key cleared rank/mastery/matches and showed an actionable
+      Settings message instead of keeping the previous player's values
+PASS  Delayed invalidated profile response did not overwrite the local profile
+PASS  1200x760 desktop layout had no document or main-scroller overflow
+PASS  700x760 narrow layout had no document or main-scroller overflow
+PASS  Clean populated and account-switch browser runs had no console warnings
+      or errors
+
+The browser fixture made no Riot or Spotify request and contained no credential.
+
+
+WINDOWS BUILD AND NATIVE SMOKE TEST
+-----------------------------------
+
+PASS  Optimized x86_64-pc-windows-msvc application built
+PASS  NSIS installer built: Aura_0.10.0_x64-setup.exe
+PASS  Portable executable built: Aura.exe
+PASS  FileVersion/ProductVersion: 0.10.0 for both binaries
+PASS  Native portable app launched and stayed alive for 15 seconds
+PASS  Root Aura process private memory: 5.74 MiB in this observation
+PASS  Root Aura process working set: 31.33 MiB in this observation
+PASS  Root Aura startup CPU time: 0.25 seconds over the 15-second smoke window
+PASS  Unchanged publisher rerun reused the verified fingerprint cache in
+      approximately 2.81 seconds
+
+Portable executable size: 5,469,184 bytes
+NSIS installer size:      1,778,814 bytes
+
+Portable Aura.exe SHA-256:
+  75c91f9788b9c6a0457f7eb4028a7b35d7878fce771df2155889d4a96f29366c
+
+Installer SHA-256:
+  e6df8be1575731e2ecde13bf61dd191a9cd6501605549ae381daaf41fa8db763
+
+Publisher input fingerprint:
+  bb2cfd8e174704d7d27e937624a1f10305e7271d070104180cd329a73543006c
+
+
+SECURITY AND FAILURE ISOLATION
+------------------------------
+
+PASS  Riot credential remains in Rust/Windows Credential Manager only
+PASS  Champion mastery uses the existing sanitized Riot transport errors
+PASS  API key and bearer-like values are absent from mastery DTOs and fixtures
+PASS  Cache entries and selected identity remain process-memory only
+PASS  Unsupported/invalid champion IDs cannot create broken portrait actions
+PASS  API strings rendered into markup are escaped; badge DOM uses textContent
+PASS  Public CI requires Authenticode signing for public release tags
+
+
+LIVE-DATA / PUBLICATION / PERFORMANCE LIMITS
+--------------------------------------------
+
+1. A real mastery/rank acceptance test still requires a valid, non-expired Riot
+   API key and a reachable account. Fixtures and DTO tests do not substitute
+   for production-key acceptance.
+2. Riot development keys expire and must not be embedded in a binary. The user
+   must replace an expired key through Settings/Windows Credential Manager.
+3. These local artifacts are not Authenticode-signed. Public installers must be
+   built, signed, and timestamped by the protected release workflow.
+4. Clean install, upgrade-over-an-existing-Aura-install, and uninstall were not
+   executed because that would overwrite the user's current installed copy.
+5. The root Rust/Tauri process is small, but the complete WebView2 process tree
+   is not under 30 MiB. One 15-second observation measured 7 processes at
+   171.54 MiB private bytes / 372.00 MiB summed working set. Shared/GPU page
+   accounting and Windows residency vary, but the original strict total-RAM
+   target is not met by the Tauri/WebView2 architecture. Meeting a true total
+   <30 MiB ceiling would require a native non-WebView UI or a headless mode.
+6. Existing Spotify OAuth/Connect and live LCU behavior were not reauthorized
+   against real accounts in this mastery-focused release.

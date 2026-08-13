@@ -1,0 +1,135 @@
+AURA 0.9.0 VALIDATION REPORT
+============================
+
+Date: 2026-08-02
+Target: 64-bit Windows application plus NSIS installer
+Result: PASS, with the live-data and publication limits listed below
+
+
+DYNAMIC MAP CONTROL REPLAY
+--------------------------
+
+Implemented:
+
+- Lazy GET /lol/match/v5/matches/{matchId}/timeline integration.
+- Direct typed deserialization that skips unused heavyweight Timeline fields.
+- Required metadata/info/frames validation and match-id verification.
+- Single-flight timeline requests and a bounded three-match volatile LRU cache.
+- A streaming 16 MiB Timeline response ceiling before typed JSON decoding.
+- Compact positional/team/event JSON contract joined to cached Match-V5 detail.
+- Interpolated champion movement with blue/red portrait borders.
+- Curved estimated territorial-pressure frontier and Blue/Red percentage bar.
+- Synced Kills, Gold, Turrets, and Game Clock header.
+- Timed major-objective banners.
+- Map Control Over Time Canvas graph with synchronized scrubber.
+- Play/Pause, -15s, +15s, and 1x/4x/8x/16x playback controls.
+- Collapse/profile/page/document lifecycle cleanup and 24 FPS active cap.
+- Device pixel ratio capped at 1.5; no D3/framework dependency.
+- Base-aware recall snapping, smooth normal travel, and missing-position carry-forward.
+- Three-entry frontend LRU plus authoritative Match-V5 match-end duration.
+- Summoner's Rift availability guard requiring positions from both teams.
+- OCE Match-V5 routing corrected to Riot's SEA regional host.
+
+The UI explicitly says Estimated Map Control. Riot Match-V5 Timeline does not
+provide measured fog-of-war polygons or a complete guaranteed ward-position
+stream. BUILDING_KILL and newer objective-specific event fields are parsed as
+best-effort optional fields because Riot's formal event DTO does not guarantee
+their complete observed payload.
+
+
+AUTOMATED VALIDATION
+--------------------
+
+PASS  cargo check --locked
+PASS  cargo fmt --all -- --check
+PASS  cargo clippy --locked --all-targets -- -D warnings
+PASS  Rust tests: 46 passed, 0 failed
+PASS  src/main.js JavaScript syntax
+PASS  src/map-control-replay.js JavaScript syntax
+PASS  Canvas model tests: 6 passed, 0 failed
+PASS  tauri.conf.json JSON decoding
+PASS  Duplicate HTML ID validation
+PASS  Release workflow validates the new module and JavaScript tests
+PASS  Source scan found no embedded real RGAPI key
+
+Rust replay tests cover regional URL construction, compact participant/team
+joins, cumulative kills/turrets/gold, Dragon/Horde/turret event normalization,
+unknown objective tolerance, missing positions, malformed 200 payload rejection,
+and the serialized snake_case contract.
+
+JavaScript tests cover a stable mirrored 50/50 estimate, a blue advance moving
+control toward blue, percentage normalization, position/gold interpolation,
+kill-event stepping, recall snapping without freezing normal travel, and
+missing-position carry-forward.
+
+
+BROWSER INTERACTION TEST
+------------------------
+
+PASS  Dynamic replay rendered with one map Canvas and one graph Canvas
+PASS  Mid-game scrub updated clock to 15:00 and synchronized all header stats
+PASS  Control readout changed to 53% Blue / 47% Red at the sampled cursor
+PASS  Baron banner appeared at 20:40 with Blue team attribution
+PASS  8x playback advanced the cursor and Play/Pause state correctly
+PASS  Curved frontier, graph path, graph cursor, champions, and controls visible
+PASS  Replay started paused and exposed a human-readable scrubber time
+PASS  No browser console warnings or errors
+
+The browser test used a deterministic local fixture and made no Riot request.
+
+
+WINDOWS BUILD AND NATIVE SMOKE TEST
+-----------------------------------
+
+PASS  Optimized x86_64-pc-windows-msvc application built
+PASS  NSIS installer built: Aura_0.9.0_x64-setup.exe
+PASS  Portable executable built: Aura.exe
+PASS  FileVersion/ProductVersion: 0.9.0
+PASS  Packaged native app launched and remained responsive for 15 seconds
+PASS  Native smoke private memory: 5.36 MB
+PASS  Native smoke working set: 29.09 MB in this observation
+PASS  Final-source release rebuild completed in about 221 seconds
+PASS  Unchanged publisher build reused verified artifacts in 3.94 seconds
+
+Portable executable size: 5,427,712 bytes
+NSIS installer size:      1,767,259 bytes
+
+Portable Aura.exe SHA-256:
+  5f7da72ba9f03089e56de60a18f6277d707714039800662f928bf177e9b87e4e
+
+Installer SHA-256:
+  42e3f50b0bb188999427e8ec35aafa1fd1249d1e0fbcaa5645e39b583cd960eb
+
+
+SECURITY AND PERFORMANCE
+------------------------
+
+PASS  Riot API key remains outside frontend code and distributed binaries
+PASS  Timeline request uses the existing Rust-only X-Riot-Token path
+PASS  Timeline match IDs must already belong to the current Profile RAM cache
+PASS  Large timelines bypass the generic serde_json::Value allocation
+PASS  Timeline downloads are rejected above a 16 MiB streaming body ceiling
+PASS  Frontend replay code is lazy-imported only after a replay is requested
+PASS  Spotify access/refresh tokens remain volatile Rust backend state
+PASS  Spotify Client ID remains a public OAuth identifier; no secret exists
+
+The 29.09 MB Windows working-set result met the original <30 MB target in this
+single smoke run, and Aura's private memory remained 5.36 MB. WebView2/Windows
+page residency varies, so this observation is not a universal <30 MB guarantee.
+
+
+LIVE-DATA / PUBLICATION LIMITS
+------------------------------
+
+1. A real recent match timeline still requires a valid, non-expired Riot API
+   key and an account with accessible Match-V5 history. The local fixture and
+   DTO tests do not substitute for a production-key live acceptance test.
+2. Dynamic territorial pressure is currently calibrated only for Summoner's
+   Rift map 11. Other maps return an explicit unavailable reason.
+3. Riot Timeline positional frames are coarse and are interpolated. The view is
+   a tactical replay, not a frame-perfect reconstruction.
+4. Clean-user installer install, upgrade, and uninstall should be tested before
+   broad distribution.
+5. These local artifacts are not Authenticode-signed. A public installer must
+   be signed and timestamped through the protected release workflow.
+6. Riot development keys expire and must never be embedded in a public build.
